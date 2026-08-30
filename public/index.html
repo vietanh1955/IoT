@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IoT Home Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="icon">⚏</span> IoT Home
+    </div>
+    <nav>
+      <button class="nav-btn active" onclick="switchTab('dashboard')">🏠 Dashboard</button>
+      <button class="nav-btn" onclick="switchTab('sensor')">📊 Data Sensor</button>
+      <button class="nav-btn" onclick="switchTab('history')">⚡ Action History</button>
+      <button class="nav-btn" onclick="switchTab('profile')">👤 Profile</button>
+    </nav>
+    <div class="system-status">
+      <div class="status-dot"></div>
+      <div>
+        <strong>SYSTEM ONLINE</strong>
+        <p>NODE_01: OK</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="content">
+    
+    <!-- TAB 1: DASHBOARD -->
+    <section id="dashboard" class="tab-content active">
+      <div class="header">
+        <div>
+          <h2>Telemetry Console</h2>
+          <p>Live sensor feed and operational relay controllers.</p>
+        </div>
+        <div class="sync-tag">🔄 SYNCED: 2s AGO</div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-head"><span>TEMPERATURE</span> 🌡️</div>
+          <h3 id="dash-temp">28.5 <span>°C</span></h3>
+          <small>↗ Normal Range · Connected</small>
+        </div>
+        <div class="card">
+          <div class="card-head"><span>HUMIDITY</span> 💧</div>
+          <h3 id="dash-hum">65.0 <span>%</span></h3>
+          <small>↗ Normal Range · Connected</small>
+        </div>
+        <div class="card">
+          <div class="card-head"><span>AMBIENT LIGHT</span> ☀️</div>
+          <h3 id="dash-light">450 <span>Lux</span></h3>
+          <small>↗ Normal Range · Connected</small>
+        </div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-header">
+          <h3>24-Hour Analytics</h3>
+          <div class="chart-time-tabs">
+            <button class="btn-time active" id="btn-time-realtime" onclick="changeChartTimeframe('realtime')">Realtime 2s</button>
+            <button class="btn-time" id="btn-time-1h" onclick="changeChartTimeframe('1h')">1 Hour</button>
+            <button class="btn-time" id="btn-time-24h" onclick="changeChartTimeframe('24h')">24 Hours</button>
+          </div>
+        </div>
+        <div style="height: 260px;">
+          <canvas id="mainChart"></canvas>
+        </div>
+      </div>
+      <div class="relays-section">
+        <h3>Relay Controllers</h3>
+        <div class="relays">
+          <div class="relay-card">
+            <div>
+              <h4>Relay Fan 01</h4>
+              <p>Primary cooling node</p>
+              <span class="status-label" id="status-text-1">Status: OFF</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-1" onchange="handleToggle(1, this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="relay-card">
+            <div>
+              <h4>Relay Light 01</h4>
+              <p>Chamber illumination array</p>
+              <span class="status-label" id="status-text-2">Status: OFF</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-2" onchange="handleToggle(2, this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: DATA SENSOR -->
+    <section id="sensor" class="tab-content">
+      <div class="header">
+        <h2>Sensor Logs & Archive</h2>
+        <div class="sync-tag">🔄 SYNCED: 2s AGO</div>
+      </div>
+      <div class="table-container">
+        <div class="filters">
+          <input type="text" id="sensorSearch" placeholder="🔍 Search by time (YYYY-MM-DD HH:mm:ss)" oninput="filterSensorTable()">
+          <select id="sensorTypeFilter" onchange="filterSensorTable()">
+            <option value="All">Type: All Types</option>
+            <option value="Temperature">Temperature</option>
+            <option value="Humidity">Humidity</option>
+            <option value="Ambient Light">Ambient Light</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>SENSOR TYPE</th><th>VALUE</th><th>RECORDED AT</th></tr>
+          </thead>
+          <tbody id="sensorTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: ACTION HISTORY -->
+<!-- TAB 3: ACTION HISTORY -->
+    <section id="history" class="tab-content">
+      <div class="header">
+        <h2>Action History</h2>
+        <div class="sync-tag">🔄 SYNCED: 2s AGO</div>
+      </div>
+      <div class="table-container">
+        <div class="filters">
+          <input type="text" id="actionSearch" placeholder="🔍 Search by time (YYYY-MM-DD HH:mm:ss)" oninput="filterActionTable()">
+          <select id="actionDeviceFilter" onchange="filterActionTable()">
+            <option value="All">Device: All Devices</option>
+            <option value="Relay Fan 01">Relay Fan 01</option>
+            <option value="Relay Light 01">Relay Light 01</option>
+          </select>
+          <!-- BỔ SUNG FILTER ACTION (ON / OFF) -->
+          <select id="actionTypeFilter" onchange="filterActionTable()">
+            <option value="All">Action: All Actions</option>
+            <option value="ON">ON</option>
+            <option value="OFF">OFF</option>
+          </select>
+          <select id="actionStatusFilter" onchange="filterActionTable()">
+            <option value="All">Status: All Status</option>
+            <option value="SUCCESS">SUCCESS</option>
+            <option value="LOADING">LOADING</option>
+            <option value="FAILED">FAILED</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr><th>LOG ID</th><th>DEVICE NAME</th><th>ACTION</th><th>STATUS</th><th>EXECUTED TIME</th></tr>
+          </thead>
+          <tbody id="actionTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: PROFILE -->
+    <section id="profile" class="tab-content">
+      <div class="header">
+        <div>
+          <h2>Developer Profile</h2>
+          <p>Academic developer info, system credentials, and repository architectures.</p>
+        </div>
+        <div class="sync-tag">🛡️ PROFILE INDEXED: SECURE</div>
+      </div>
+      <div class="profile-grid">
+        <div class="profile-card text-center">
+          <div class="avatar">👤</div>
+          <h3>Trần Việt Anh</h3>
+          <span class="badge badge-blue">B23DCAT021</span>
+          <div class="profile-details">
+            <p><strong>ACADEMIC TRACK</strong><br>Information Technology / Information Security</p>
+            <p><strong>INSTITUTION</strong><br>Posts and Telecommunications Institute of Technology</p>
+            <div class="operator-status">
+              <div class="status-dot"></div> NODE_01_OPERATOR: ONLINE
+            </div>
+          </div>
+        </div>
+        <div class="profile-card">
+          <h4>ACADEMIC DETAILS</h4>
+          <table class="info-table">
+            <tr><td>Class Code</td><td>D23CQAT01-B</td></tr>
+            <tr><td>Academic Email</td><td class="text-blue">B23AT021@stu.ptit.edu.vn</td></tr>
+            <tr><td>Institution Office</td><td>Posts and Telecommunications Institute of Technology (PTIT)</td></tr>
+          </table>
+          <h4 class="mt-20">PROJECT LINKS</h4>
+          <div class="link-btn">GitHub Repository</div>
+          <div class="link-btn">Sequence Architecture Docs</div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center;" class="mt-20">
+            <h4>TECH STACK</h4>
+            <span style="font-size: 12px; color: var(--text-muted);">(Click × to remove)</span>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="newTechInput" placeholder="Add tech skill (e.g. Docker, Redis)..." style="flex: 1; padding: 6px 12px; background: var(--bg-main); border: 1px solid var(--border); color: #fff; border-radius: 6px; font-size: 13px;">
+            <button onclick="addTechStack()" style="background: var(--accent-blue); color: #000; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">+ Add</button>
+          </div>
+
+          <div class="tech-tags" id="techStackContainer">
+            </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>

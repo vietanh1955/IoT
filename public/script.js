@@ -5,7 +5,9 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
-  event.currentTarget.classList.add('active');
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add('active');
+  }
 }
 
 // 2. Cấu hình Chart.js
@@ -106,7 +108,6 @@ async function loadInitialData() {
       time: a.executed_at || ''
     }));
 
-    // Cập nhật công tắc chính xác theo DB
     resDevs.forEach(dev => {
       const toggle = document.getElementById(`toggle-${dev.device_id}`);
       const statusText = document.getElementById(`status-text-${dev.device_id}`);
@@ -146,7 +147,7 @@ function filterSensorTable() {
   });
 }
 
-// 5. Lọc Bảng Action History (Đầy đủ Filter Device, Action, Status)
+// 5. Lọc Bảng Action History
 function filterActionTable() {
   const search = document.getElementById('actionSearch').value.toLowerCase();
   const dev = document.getElementById('actionDeviceFilter').value;
@@ -176,30 +177,63 @@ function filterActionTable() {
   });
 }
 
-// 6. Điều khiển Relay (Chống Spam / Debounce Switch 400ms)
+// 6. Điều khiển Relay
 function handleToggle(deviceId, isChecked) {
   const toggle = document.getElementById(`toggle-${deviceId}`);
   const statusText = document.getElementById(`status-text-${deviceId}`);
   const action = isChecked ? 'ON' : 'OFF';
 
-  // Cập nhật text UI ngay
-  if (statusText) statusText.innerText = `Status: ${action}`;
+  // Tạm thời hiển thị trạng thái đang xử lý
+  if (statusText) statusText.innerText = `Status: ${action} (Pending...)`;
 
-  // Khóa switch tạm thời trong 400ms để đảm bảo DB và MQTT xử lý xong trật tự
+  // Khóa switch tạm thời để tránh spam
   if (toggle) toggle.disabled = true;
-  setTimeout(() => {
-    if (toggle) toggle.disabled = false;
-  }, 400);
 
-  // Gửi socket xuống server
+  // Gửi lệnh điều khiển
   socket.emit('send_control', { deviceId, action });
 }
+
+// Xử lý đồng bộ phản hồi trạng thái thật từ Server (Thành công hoặc Timeout FAILED)
+socket.on('device_state_sync', (data) => {
+  const toggle = document.getElementById(`toggle-${data.deviceId}`);
+  const statusText = document.getElementById(`status-text-${data.deviceId}`);
+  const isOn = Number(data.status) === 1;
+
+  if (toggle) {
+    toggle.disabled = false;
+    toggle.checked = isOn; // Trả lại vị trí thật
+  }
+  if (statusText) {
+    statusText.innerText = `Status: ${isOn ? 'ON' : 'OFF'}`;
+  }
+
+  if (data.reason === 'TIMEOUT_FAILED') {
+    showToast(`⚠️ Thiết bị ${data.deviceId} không phản hồi! Đã tự động nhả về vị trí cũ.`, 'error');
+  }
+});
 
 // 7. Nhận Telemetry & Append Sensor Data
 socket.on('sensor_telemetry', (data) => {
   document.getElementById('dash-temp').innerHTML = `${data.temperature} <span>°C</span>`;
   document.getElementById('dash-hum').innerHTML = `${data.humidity} <span>%</span>`;
   document.getElementById('dash-light').innerHTML = `${data.light} <span>Lux</span>`;
+
+  // Cập nhật thẻ hiển thị mức ánh sáng
+  const lightCard = document.getElementById('card-light');
+  const lightAlertSub = document.getElementById('dash-light-sub');
+  if (data.light < 50) {
+    if (lightCard) lightCard.classList.add('card-warning');
+    if (lightAlertSub) {
+      lightAlertSub.innerText = '⚠️ Cảnh báo: Quá tối (< 50 Lux)';
+      lightAlertSub.style.color = 'var(--accent-red)';
+    }
+  } else {
+    if (lightCard) lightCard.classList.remove('card-warning');
+    if (lightAlertSub) {
+      lightAlertSub.innerText = '↗ Normal Range · Connected';
+      lightAlertSub.style.color = 'var(--accent-green)';
+    }
+  }
 
   const timeLabel = data.time.split(' ')[1] || data.time;
   if (realtimeChartData.labels.length >= 8) {
@@ -229,6 +263,11 @@ socket.on('sensor_telemetry', (data) => {
   filterSensorTable();
 });
 
+// Nhận sự kiện Cảnh báo ánh sáng yếu
+socket.on('alert_trigger', (alert) => {
+  showToast(`☀️ ${alert.message}`, 'warning');
+});
+
 // Append Action mới vào bảng
 socket.on('action_logged', (data) => {
   actionRows.unshift({
@@ -242,7 +281,28 @@ socket.on('action_logged', (data) => {
   filterActionTable();
 });
 
-// 8. LOGIC CRUD TECH STACK (Profile Tab)
+// Toast notification helper
+function showToast(message, type = 'info') {
+  let toastContainer = document.getElementById('toastContainer');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toastContainer';
+    toastContainer.className = 'toast-container';
+    document.body.appendChild(toastContainer);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast-item toast-${type}`;
+  toast.innerText = message;
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+// 8. LOGIC CRUD TECH STACK
 const defaultTechs = ['ESP32', 'Mosquitto MQTT', 'Node.js', 'MySQL', 'REST API', 'WebSocket'];
 
 function getTechs() {

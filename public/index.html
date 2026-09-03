@@ -51,10 +51,10 @@
           <h3 id="dash-hum">65.0 <span>%</span></h3>
           <small>↗ Normal Range · Connected</small>
         </div>
-        <div class="card">
+        <div class="card" id="card-light">
           <div class="card-head"><span>AMBIENT LIGHT</span> ☀️</div>
           <h3 id="dash-light">450 <span>Lux</span></h3>
-          <small>↗ Normal Range · Connected</small>
+          <small id="dash-light-sub">↗ Normal Range · Connected</small>
         </div>
       </div>
       <div class="chart-container">
@@ -125,7 +125,6 @@
     </section>
 
     <!-- TAB 3: ACTION HISTORY -->
-<!-- TAB 3: ACTION HISTORY -->
     <section id="history" class="tab-content">
       <div class="header">
         <h2>Action History</h2>
@@ -139,7 +138,6 @@
             <option value="Relay Fan 01">Relay Fan 01</option>
             <option value="Relay Light 01">Relay Light 01</option>
           </select>
-          <!-- BỔ SUNG FILTER ACTION (ON / OFF) -->
           <select id="actionTypeFilter" onchange="filterActionTable()">
             <option value="All">Action: All Actions</option>
             <option value="ON">ON</option>
@@ -204,8 +202,7 @@
             <button onclick="addTechStack()" style="background: var(--accent-blue); color: #000; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">+ Add</button>
           </div>
 
-          <div class="tech-tags" id="techStackContainer">
-            </div>
+          <div class="tech-tags" id="techStackContainer"></div>
         </div>
       </div>
     </section>

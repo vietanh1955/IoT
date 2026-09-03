@@ -14,7 +14,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Hàm định dạng chuẩn múi giờ Việt Nam (UTC+7): YYYY-MM-DD HH:mm:ss
 function getVNTimeString(date = new Date()) {
   const vnDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
   const yyyy = vnDate.getFullYear();
@@ -26,7 +25,7 @@ function getVNTimeString(date = new Date()) {
   return `${yyyy}-${MM}-${dd} ${hh}:${mm}:${ss}`;
 }
 
-// 1. Kết nối CSDL MySQL (Điền mật khẩu nếu có)
+// 1. Kết nối CSDL MySQL
 const pool = mysql.createPool({
   host: 'localhost',
   user: 'root',
@@ -43,8 +42,6 @@ const TOPIC_CONTROL  = 'iot_ptit/device_control';
 const TOPIC_RESPONSE = 'iot_ptit/device_response';
 
 const mqttClient = mqtt.connect(MQTT_BROKER);
-
-// Quản lý các lệnh đang chờ mạch phản hồi (Map theo key: "deviceId_action")
 const pendingActions = new Map();
 
 mqttClient.on('connect', () => {
@@ -52,29 +49,110 @@ mqttClient.on('connect', () => {
   mqttClient.subscribe([TOPIC_SENSOR, TOPIC_RESPONSE]);
 });
 
+// Hàm dùng chung để kích hoạt gửi lệnh điều khiển (cho cả Socket và Tự động hóa)
+async function executeDeviceControl(devId, act, origin = 'MANUAL') {
+  const currentUserId = 1;
+  const timeStr = getVNTimeString();
+
+  const [devRows] = await pool.query('SELECT device_name, status FROM device WHERE device_id = ?', [devId]);
+  const devName = devRows.length ? devRows[0].device_name : `Device ${devId}`;
+  const previousStatus = devRows.length ? Number(devRows[0].status) : 0;
+
+  // Ghi nhận bản ghi LOADING vào action_history
+  const [ins] = await pool.query(
+    'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
+    [devId, currentUserId, act, 'LOADING', timeStr]
+  );
+
+  io.emit('action_logged', {
+    action_id: ins.insertId,
+    device_name: devName,
+    action: act,
+    status: 'LOADING',
+    executed_at: timeStr
+  });
+
+  // Gửi lệnh MQTT đến ESP8266
+  mqttClient.publish(TOPIC_CONTROL, JSON.stringify({ deviceId: parseInt(devId), action: act }));
+
+  // Thiết lập Timeout 3.5s kiểm tra phản hồi
+  const key = `${devId}_${act}`;
+  const timer = setTimeout(async () => {
+    if (pendingActions.has(key)) {
+      console.log(`[Action Timeout] Device ${devId} did not respond -> Trigger FAILED & REVERT`);
+      pendingActions.delete(key);
+
+      const failTimeStr = getVNTimeString();
+      const [failIns] = await pool.query(
+        'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
+        [devId, currentUserId, act, 'FAILED', failTimeStr]
+      );
+
+      io.emit('action_logged', {
+        action_id: failIns.insertId,
+        device_name: devName,
+        action: act,
+        status: 'FAILED',
+        executed_at: failTimeStr
+      });
+
+      // KHÔI PHỤC TRẠNG THÁI CŨ TRONG DB NẾU THẤT BẠI
+      await pool.query('UPDATE device SET status = ? WHERE device_id = ?', [previousStatus, devId]);
+
+      // ĐỒNG BỘ NÚT BẬT/TẮT TRÊN GIAO DIỆN VỀ TRẠNG THÁI CŨ
+      io.emit('device_state_sync', {
+        deviceId: parseInt(devId),
+        status: previousStatus,
+        reason: 'TIMEOUT_FAILED'
+      });
+    }
+  }, 3500);
+
+  pendingActions.set(key, { timer, devName, previousStatus, targetAction: act });
+}
+
 mqttClient.on('message', async (topic, message) => {
   try {
     const data = JSON.parse(message.toString());
 
-    // 1. Nhận dữ liệu cảm biến định kỳ -> Lưu CSDL và bắn Socket lên Web
+    // 1. Nhận dữ liệu cảm biến
     if (topic === TOPIC_SENSOR) {
       const { temperature, humidity, light } = data;
+      const lightVal = parseInt(light);
       const timeStr = getVNTimeString();
 
       await pool.query(
         'INSERT INTO sensor_data (sensor_id, reading_value, recorded_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)',
-        [1, temperature, timeStr, 2, humidity, timeStr, 3, light, timeStr]
+        [1, temperature, timeStr, 2, humidity, timeStr, 3, lightVal, timeStr]
       );
 
       io.emit('sensor_telemetry', {
         temperature: parseFloat(temperature),
         humidity: parseFloat(humidity),
-        light: parseInt(light),
+        light: lightVal,
         time: timeStr
       });
+
+      // CHỨC NĂNG ALERT VƯỢT NGƯỠNG ÁNH SÁNG (< 50 LUX) & TỰ ĐỘNG BẬT ĐÈN (DEVICE 2)
+      const LIGHT_LIMIT = 50;
+      if (lightVal < LIGHT_LIMIT) {
+        // Gửi alert lên frontend hiển thị cảnh báo
+        io.emit('alert_trigger', {
+          type: 'LOW_LIGHT',
+          message: `Ánh sáng phòng yếu (${lightVal} Lux < ${LIGHT_LIMIT} Lux). Hệ thống đang kích hoạt bật đèn!`,
+          value: lightVal
+        });
+
+        // Kiểm tra trạng thái đèn (Device 2 - Relay Light 01)
+        const [lightDev] = await pool.query('SELECT status FROM device WHERE device_id = 2');
+        if (lightDev.length && Number(lightDev[0].status) === 0 && !pendingActions.has('2_ON')) {
+          console.log('[AUTO ALERT] Light < 50 Lux -> Auto turning ON Relay Light 01');
+          await executeDeviceControl(2, 'ON', 'AUTO');
+        }
+      }
     }
 
-    // 2. Nhận phản hồi ACK từ ESP8266 -> APPEND bản ghi SUCCESS vào CSDL và Web
+    // 2. Nhận phản hồi ACK từ mạch ESP8266
     if (topic === TOPIC_RESPONSE) {
       console.log('[MQTT Response received]:', data);
       const devId = String(data.deviceId);
@@ -83,13 +161,16 @@ mqttClient.on('message', async (topic, message) => {
 
       if (pendingActions.has(key)) {
         const item = pendingActions.get(key);
-        clearTimeout(item.timer); // Hủy bộ đếm timeout
+        clearTimeout(item.timer);
         pendingActions.delete(key);
 
         const currentUserId = 1;
         const timeStr = getVNTimeString();
+        const newStatus = act === 'ON' ? 1 : 0;
 
-        // Ghi bản ghi mới mang trạng thái SUCCESS (Append)
+        // Chỉ cập nhật trạng thái vào DB khi ESP8266 đã xác nhận SUCCESS
+        await pool.query('UPDATE device SET status = ?, last_connected = NOW() WHERE device_id = ?', [newStatus, devId]);
+
         const [ins] = await pool.query(
           'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
           [devId, currentUserId, act, 'SUCCESS', timeStr]
@@ -102,6 +183,13 @@ mqttClient.on('message', async (topic, message) => {
           status: 'SUCCESS',
           executed_at: timeStr
         });
+
+        // Xác nhận trạng thái thành công cho Web UI
+        io.emit('device_state_sync', {
+          deviceId: parseInt(devId),
+          status: newStatus,
+          reason: 'SUCCESS'
+        });
       }
     }
   } catch (err) {
@@ -109,72 +197,12 @@ mqttClient.on('message', async (topic, message) => {
   }
 });
 
-// 3. Socket.io nhận lệnh điều khiển từ Web Dashboard
+// 3. Socket.io nhận lệnh điều khiển thủ công từ người dùng
 io.on('connection', (socket) => {
-  console.log('[Socket.io] Client connected:', socket.id);
-
   socket.on('send_control', async (payload) => {
-    console.log('[Web Control Send]:', payload);
     const devId = String(payload.deviceId);
     const act = String(payload.action).toUpperCase();
-    const tinyStatus = act === 'ON' ? 1 : 0;
-    const currentUserId = 1;
-    const timeStr = getVNTimeString();
-
-    try {
-      // BƯỚC 1: CẬP NHẬT NGAY TRẠNG THÁI DEVICE VÀO DB (Đảm bảo reload trang giữ đúng trạng thái mới nhất)
-      await pool.query('UPDATE device SET status = ?, last_connected = NOW() WHERE device_id = ?', [tinyStatus, devId]);
-
-      const [devRows] = await pool.query('SELECT device_name FROM device WHERE device_id = ?', [devId]);
-      const devName = devRows.length ? devRows[0].device_name : `Device ${devId}`;
-
-      // BƯỚC 2: APPEND BẢN GHI LOADING VÀO CSDL
-      const [ins] = await pool.query(
-        'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
-        [devId, currentUserId, act, 'LOADING', timeStr]
-      );
-
-      // BƯỚC 3: APPEND DÒNG LOADING LÊN GIAO DIỆN WEB
-      io.emit('action_logged', {
-        action_id: ins.insertId,
-        device_name: devName,
-        action: act,
-        status: 'LOADING',
-        executed_at: timeStr
-      });
-
-      // BƯỚC 4: GỬI LỆNH MQTT XUỐNG MẠCH ESP8266
-      mqttClient.publish(TOPIC_CONTROL, JSON.stringify({ deviceId: parseInt(devId), action: act }));
-
-      // BƯỚC 5: THIẾT LẬP TIMEOUT 3.5s -> NẾU RÚT MẠCH HOẶC KHÔNG CÓ PHẢN HỒI THÌ APPEND FAILED
-      const key = `${devId}_${act}`;
-      const timer = setTimeout(async () => {
-        if (pendingActions.has(key)) {
-          console.log(`[Action Timeout] Device ${devId} did not respond -> Trigger FAILED`);
-          pendingActions.delete(key);
-
-          const failTimeStr = getVNTimeString();
-          const [failIns] = await pool.query(
-            'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
-            [devId, currentUserId, act, 'FAILED', failTimeStr]
-          );
-
-          // APPEND DÒNG FAILED LÊN GIAO DIỆN WEB
-          io.emit('action_logged', {
-            action_id: failIns.insertId,
-            device_name: devName,
-            action: act,
-            status: 'FAILED',
-            executed_at: failTimeStr
-          });
-        }
-      }, 3500);
-
-      pendingActions.set(key, { timer, devName });
-
-    } catch (err) {
-      console.error('[Control DB Error]', err.message);
-    }
+    await executeDeviceControl(devId, act, 'MANUAL');
   });
 });
 

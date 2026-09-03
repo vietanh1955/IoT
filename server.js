@@ -35,18 +35,19 @@ const pool = mysql.createPool({
   connectionLimit: 10
 });
 
-// 2. Cấu hình MQTT Broker HiveMQ
+// 2. Cấu hình MQTT Broker HiveMQ & Topic Đồng bộ
 const MQTT_BROKER = 'mqtt://broker.hivemq.com:1883';
 const TOPIC_SENSOR   = 'iot_ptit/data_sensor';
 const TOPIC_CONTROL  = 'iot_ptit/device_control';
 const TOPIC_RESPONSE = 'iot_ptit/device_response';
+const TOPIC_SYNC     = 'iot_ptit/device_sync'; // TOPIC ĐỒNG BỘ TRẠNG THÁI
 
 const mqttClient = mqtt.connect(MQTT_BROKER);
 const pendingActions = new Map();
 
 mqttClient.on('connect', () => {
   console.log('[MQTT] Connected successfully to HiveMQ Broker');
-  mqttClient.subscribe([TOPIC_SENSOR, TOPIC_RESPONSE]);
+  mqttClient.subscribe([TOPIC_SENSOR, TOPIC_RESPONSE, TOPIC_SYNC]);
 });
 
 // Hàm dùng chung để kích hoạt gửi lệnh điều khiển (cho cả Socket và Tự động hóa)
@@ -115,6 +116,22 @@ mqttClient.on('message', async (topic, message) => {
   try {
     const data = JSON.parse(message.toString());
 
+    // 0. ESP8266 VỪA CẮM ĐIỆN VÀ GỬI YÊU CẦU ĐỒNG BỘ LẠI TRẠNG THÁI RELAY
+    if (topic === TOPIC_SYNC) {
+      console.log('[MQTT Sync Request] ESP8266 connected. Pushing DB device states to board...');
+      const [devices] = await pool.query('SELECT device_id, status FROM device');
+      
+      devices.forEach(dev => {
+        const act = Number(dev.status) === 1 ? 'ON' : 'OFF';
+        // Bắn trực tiếp trạng thái hiện tại từ DB xuống để mạch kéo relay tương ứng
+        mqttClient.publish(TOPIC_CONTROL, JSON.stringify({
+          deviceId: parseInt(dev.device_id),
+          action: act
+        }));
+      });
+      return;
+    }
+
     // 1. Nhận dữ liệu cảm biến
     if (topic === TOPIC_SENSOR) {
       const { temperature, humidity, light } = data;
@@ -136,14 +153,12 @@ mqttClient.on('message', async (topic, message) => {
       // CHỨC NĂNG ALERT VƯỢT NGƯỠNG ÁNH SÁNG (< 50 LUX) & TỰ ĐỘNG BẬT ĐÈN (DEVICE 2)
       const LIGHT_LIMIT = 50;
       if (lightVal < LIGHT_LIMIT) {
-        // Gửi alert lên frontend hiển thị cảnh báo
         io.emit('alert_trigger', {
           type: 'LOW_LIGHT',
           message: `Ánh sáng phòng yếu (${lightVal} Lux < ${LIGHT_LIMIT} Lux). Hệ thống đang kích hoạt bật đèn!`,
           value: lightVal
         });
 
-        // Kiểm tra trạng thái đèn (Device 2 - Relay Light 01)
         const [lightDev] = await pool.query('SELECT status FROM device WHERE device_id = 2');
         if (lightDev.length && Number(lightDev[0].status) === 0 && !pendingActions.has('2_ON')) {
           console.log('[AUTO ALERT] Light < 50 Lux -> Auto turning ON Relay Light 01');
@@ -168,7 +183,6 @@ mqttClient.on('message', async (topic, message) => {
         const timeStr = getVNTimeString();
         const newStatus = act === 'ON' ? 1 : 0;
 
-        // Chỉ cập nhật trạng thái vào DB khi ESP8266 đã xác nhận SUCCESS
         await pool.query('UPDATE device SET status = ?, last_connected = NOW() WHERE device_id = ?', [newStatus, devId]);
 
         const [ins] = await pool.query(
@@ -184,7 +198,6 @@ mqttClient.on('message', async (topic, message) => {
           executed_at: timeStr
         });
 
-        // Xác nhận trạng thái thành công cho Web UI
         io.emit('device_state_sync', {
           deviceId: parseInt(devId),
           status: newStatus,

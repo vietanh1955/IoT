@@ -119,7 +119,6 @@ async function loadInitialData() {
 
     filterSensorTable();
     filterActionTable();
-    renderTechStack();
   } catch (err) {
     console.error('Fetch error:', err);
   }
@@ -301,59 +300,5 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
-
-// 8. LOGIC CRUD TECH STACK
-const defaultTechs = ['ESP32', 'Mosquitto MQTT', 'Node.js', 'MySQL', 'REST API', 'WebSocket'];
-
-function getTechs() {
-  const saved = localStorage.getItem('user_tech_stack');
-  return saved ? JSON.parse(saved) : defaultTechs;
-}
-
-function saveTechs(techs) {
-  localStorage.setItem('user_tech_stack', JSON.stringify(techs));
-}
-
-function renderTechStack() {
-  const container = document.getElementById('techStackContainer');
-  if (!container) return;
-  const techs = getTechs();
-  container.innerHTML = techs.map((tech, idx) => `
-    <span class="tech-tag-item">
-      ${tech}
-      <span class="tech-tag-remove" onclick="removeTechStack(${idx})" title="Remove skill">×</span>
-    </span>
-  `).join('');
-}
-
-function addTechStack() {
-  const input = document.getElementById('newTechInput');
-  const val = input.value.trim();
-  if (!val) return;
-  
-  const techs = getTechs();
-  if (!techs.includes(val)) {
-    techs.push(val);
-    saveTechs(techs);
-    renderTechStack();
-  }
-  input.value = '';
-}
-
-function removeTechStack(idx) {
-  const techs = getTechs();
-  techs.splice(idx, 1);
-  saveTechs(techs);
-  renderTechStack();
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('newTechInput');
-  if (input) {
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') addTechStack();
-    });
-  }
-});
 
 loadInitialData();

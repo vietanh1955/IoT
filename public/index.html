@@ -157,7 +157,7 @@
       </div>
     </section>
 
-    <!-- TAB 4: PROFILE -->
+<!-- TAB 4: PROFILE -->
     <section id="profile" class="tab-content">
       <div class="header">
         <div>
@@ -174,9 +174,6 @@
           <div class="profile-details">
             <p><strong>ACADEMIC TRACK</strong><br>Information Technology / Information Security</p>
             <p><strong>INSTITUTION</strong><br>Posts and Telecommunications Institute of Technology</p>
-            <div class="operator-status">
-              <div class="status-dot"></div> NODE_01_OPERATOR: ONLINE
-            </div>
           </div>
         </div>
         <div class="profile-card">
@@ -186,21 +183,23 @@
             <tr><td>Academic Email</td><td class="text-blue">B23AT021@stu.ptit.edu.vn</td></tr>
             <tr><td>Institution Office</td><td>Posts and Telecommunications Institute of Technology (PTIT)</td></tr>
           </table>
+
           <h4 class="mt-20">PROJECT LINKS</h4>
           <div class="link-btn">GitHub Repository</div>
           <div class="link-btn">Sequence Architecture Docs</div>
           
-          <div style="display: flex; justify-content: space-between; align-items: center;" class="mt-20">
-            <h4>TECH STACK</h4>
-            <span style="font-size: 12px; color: var(--text-muted);">(Click × to remove)</span>
+          <h4 class="mt-20">TECH STACK</h4>
+          <div class="tech-tags">
+            <span class="badge">ESP8266</span>
+            <span class="badge">C++ / Arduino</span>
+            <span class="badge">Node.js</span>
+            <span class="badge">Express</span>
+            <span class="badge">MQTT / HiveMQ</span>
+            <span class="badge">Socket.io</span>
+            <span class="badge">MySQL</span>
+            <span class="badge">HTML5 / CSS3 / JS</span>
+            <span class="badge">Chart.js</span>
           </div>
-
-          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <input type="text" id="newTechInput" placeholder="Add tech skill (e.g. Docker, Redis)..." style="flex: 1; padding: 6px 12px; background: var(--bg-main); border: 1px solid var(--border); color: #fff; border-radius: 6px; font-size: 13px;">
-            <button onclick="addTechStack()" style="background: var(--accent-blue); color: #000; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">+ Add</button>
-          </div>
-
-          <div class="tech-tags" id="techStackContainer"></div>
         </div>
       </div>
     </section>

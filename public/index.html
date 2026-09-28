@@ -119,6 +119,14 @@
           </thead>
           <tbody id="sensorTableBody"></tbody>
         </table>
+        <div class="pagination-container">
+          <span id="sensorPageInfo">Showing 1-20 of 0 entries</span>
+          <div class="pagination-buttons">
+            <button class="btn-page" id="sensorBtnPrev" onclick="changeSensorPage(-1)">Previous</button>
+            <span class="page-current" id="sensorPageCurrent">1</span>
+            <button class="btn-page" id="sensorBtnNext" onclick="changeSensorPage(1)">Next</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -154,6 +162,14 @@
           </thead>
           <tbody id="actionTableBody"></tbody>
         </table>
+        <div class="pagination-container">
+          <span id="actionPageInfo">Showing 1-20 of 0 entries</span>
+          <div class="pagination-buttons">
+            <button class="btn-page" id="actionBtnPrev" onclick="changeActionPage(-1)">Previous</button>
+            <span class="page-current" id="actionPageCurrent">1</span>
+            <button class="btn-page" id="actionBtnNext" onclick="changeActionPage(1)">Next</button>
+          </div>
+        </div>
       </div>
     </section>
 

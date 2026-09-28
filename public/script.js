@@ -124,15 +124,56 @@ async function loadInitialData() {
   }
 }
 
-// 4. Lọc Bảng Sensor Logs
-function filterSensorTable() {
+// ==========================================
+// CẤU HÌNH PHÂN TRANG (PAGINATION)
+// ==========================================
+const ROWS_PER_PAGE = 20;
+
+let currentSensorPage = 1;
+let currentActionPage = 1;
+
+// Mảng lưu kết quả sau khi lọc (dùng để cắt trang)
+let filteredSensors = [];
+let filteredActions = [];
+
+// ==========================================
+// 4. BẢNG SENSOR DATA: LỌC & PHÂN TRANG
+// ==========================================
+function filterSensorTable(resetPage = true) {
+  if (resetPage) currentSensorPage = 1; // Khi người dùng đổi bộ lọc thì quay về trang 1
+
   const search = document.getElementById('sensorSearch').value.toLowerCase();
   const type = document.getElementById('sensorTypeFilter').value;
+
+  // 1. Lọc dữ liệu theo điều kiện
+  filteredSensors = sensorRows.filter(row => {
+    const matchType = (type === 'All' || row.type === type);
+    const matchTime = row.time.toLowerCase().includes(search);
+    return matchType && matchTime;
+  });
+
+  renderSensorPagination();
+}
+
+function renderSensorPagination() {
   const tbody = document.getElementById('sensorTableBody');
   tbody.innerHTML = '';
 
-  sensorRows.forEach(row => {
-    if ((type === 'All' || row.type === type) && row.time.includes(search)) {
+  const totalEntries = filteredSensors.length;
+  const totalPages = Math.ceil(totalEntries / ROWS_PER_PAGE) || 1;
+
+  if (currentSensorPage > totalPages) currentSensorPage = totalPages;
+  if (currentSensorPage < 1) currentSensorPage = 1;
+
+  // 2. Cắt đúng 20 phần tử của trang hiện tại
+  const startIndex = (currentSensorPage - 1) * ROWS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ROWS_PER_PAGE, totalEntries);
+  const pageItems = filteredSensors.slice(startIndex, endIndex);
+
+  if (pageItems.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:20px;">Không có dữ liệu phù hợp</td></tr>`;
+  } else {
+    pageItems.forEach(row => {
       let badgeCls = row.type === 'Temperature' ? 'badge-red' : (row.type === 'Humidity' ? 'badge-blue' : 'badge-yellow');
       tbody.innerHTML += `
         <tr>
@@ -142,26 +183,66 @@ function filterSensorTable() {
           <td>${row.time}</td>
         </tr>
       `;
-    }
-  });
+    });
+  }
+
+  // 3. Cập nhật nhãn thông tin và trạng thái nút Previous/Next
+  document.getElementById('sensorPageInfo').innerText = totalEntries > 0 
+    ? `Showing ${startIndex + 1}-${endIndex} of ${totalEntries} entries` 
+    : 'Showing 0 of 0 entries';
+  document.getElementById('sensorPageCurrent').innerText = currentSensorPage;
+
+  document.getElementById('sensorBtnPrev').disabled = (currentSensorPage <= 1);
+  document.getElementById('sensorBtnNext').disabled = (currentSensorPage >= totalPages || totalEntries === 0);
 }
 
-// 5. Lọc Bảng Action History
-function filterActionTable() {
+function changeSensorPage(step) {
+  currentSensorPage += step;
+  renderSensorPagination();
+}
+
+// ==========================================
+// 5. BẢNG ACTION HISTORY: LỌC & PHÂN TRANG
+// ==========================================
+function filterActionTable(resetPage = true) {
+  if (resetPage) currentActionPage = 1;
+
   const search = document.getElementById('actionSearch').value.toLowerCase();
   const dev = document.getElementById('actionDeviceFilter').value;
   const act = document.getElementById('actionTypeFilter').value;
   const status = document.getElementById('actionStatusFilter').value;
-  const tbody = document.getElementById('actionTableBody');
-  tbody.innerHTML = '';
 
-  actionRows.forEach(row => {
-    const matchTime = row.time.includes(search);
+  // 1. Lọc dữ liệu theo 4 tiêu chí
+  filteredActions = actionRows.filter(row => {
+    const matchTime = row.time.toLowerCase().includes(search);
     const matchDev = (dev === 'All' || row.device === dev);
     const matchAct = (act === 'All' || row.action === act);
     const matchStatus = (status === 'All' || row.status === status);
+    return matchTime && matchDev && matchAct && matchStatus;
+  });
 
-    if (matchTime && matchDev && matchAct && matchStatus) {
+  renderActionPagination();
+}
+
+function renderActionPagination() {
+  const tbody = document.getElementById('actionTableBody');
+  tbody.innerHTML = '';
+
+  const totalEntries = filteredActions.length;
+  const totalPages = Math.ceil(totalEntries / ROWS_PER_PAGE) || 1;
+
+  if (currentActionPage > totalPages) currentActionPage = totalPages;
+  if (currentActionPage < 1) currentActionPage = 1;
+
+  // 2. Cắt đúng 20 phần tử của trang hiện tại
+  const startIndex = (currentActionPage - 1) * ROWS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ROWS_PER_PAGE, totalEntries);
+  const pageItems = filteredActions.slice(startIndex, endIndex);
+
+  if (pageItems.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">Không có dữ liệu phù hợp</td></tr>`;
+  } else {
+    pageItems.forEach(row => {
       let statCls = row.status === 'SUCCESS' ? 'badge-green' : (row.status === 'FAILED' ? 'badge-red' : 'badge-blue');
       tbody.innerHTML += `
         <tr>
@@ -172,8 +253,22 @@ function filterActionTable() {
           <td>${row.time}</td>
         </tr>
       `;
-    }
-  });
+    });
+  }
+
+  // 3. Cập nhật nhãn và trạng thái nút bấm
+  document.getElementById('actionPageInfo').innerText = totalEntries > 0 
+    ? `Showing ${startIndex + 1}-${endIndex} of ${totalEntries} entries` 
+    : 'Showing 0 of 0 entries';
+  document.getElementById('actionPageCurrent').innerText = currentActionPage;
+
+  document.getElementById('actionBtnPrev').disabled = (currentActionPage <= 1);
+  document.getElementById('actionBtnNext').disabled = (currentActionPage >= totalPages || totalEntries === 0);
+}
+
+function changeActionPage(step) {
+  currentActionPage += step;
+  renderActionPagination();
 }
 
 // 6. Điều khiển Relay

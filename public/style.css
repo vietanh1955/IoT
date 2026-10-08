@@ -111,7 +111,26 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; }
 .info-table td { padding: 10px 0; border: none; font-size: 14px; }
 .info-table td:first-child { color: var(--text-muted); width: 160px; }
 .mt-20 { margin-top: 20px; margin-bottom: 10px; color: var(--accent-blue); font-size: 13px; }
-.link-btn { background: var(--bg-main); padding: 12px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; font-size: 14px; }
+.link-btn {
+  background: var(--bg-main);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-bottom: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--text-main);
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+.link-btn:visited {
+  color: var(--text-main);
+}
+.link-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
 .tech-tags span { background: var(--bg-main); border: 1px solid var(--border); padding: 5px 12px; border-radius: 6px; font-size: 12px; margin: 0 6px 6px 0; display: inline-block; }
 
 .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }

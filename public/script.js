@@ -1,29 +1,29 @@
-const socket = io(); 
+const socket = io();
 
-const ROWS_PER_PAGE = 20; 
-let currentSensorPage = 1; 
-let currentActionPage = 1; 
-let sensorRows = []; 
-let actionRows = []; 
-let filteredSensors = []; 
-let filteredActions = []; 
+const ROWS_PER_PAGE = 20;
+let currentSensorPage = 1;
+let currentActionPage = 1;
+let sensorRows = [];
+let actionRows = [];
+let filteredSensors = [];
+let filteredActions = [];
 
 function switchTab(tabId) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active')); // Ẩn tất cả tab
-  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active')); // Tắt sáng các nút sidebar
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
   const targetTab = document.getElementById(tabId);
   if (targetTab) targetTab.classList.add('active');
 
   const targetBtn = document.querySelector(`.nav-btn[onclick*="${tabId}"]`);
-  if (targetBtn) targetBtn.classList.add('active'); // Làm sáng nút menu tương ứng
+  if (targetBtn) targetBtn.classList.add('active');
 
   localStorage.setItem('active_iot_tab', tabId);
 }
 
 function showToast(message, type = 'info') {
   let toastContainer = document.getElementById('toastContainer');
-  if (!toastContainer) { 
+  if (!toastContainer) {
     toastContainer = document.createElement('div');
     toastContainer.id = 'toastContainer';
     toastContainer.className = 'toast-container';
@@ -40,8 +40,6 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
-
-let currentTimeframe = 'realtime'; 
 
 const realtimeChartData = {
   labels: [],
@@ -74,62 +72,37 @@ const mainChart = new Chart(ctx, {
   }
 });
 
-async function loadChartHistory(timeframe) {
-  try {
-    const res = await fetch(`/api/sensors/history?range=${timeframe}`);
-    const rows = await res.json();
-
-    const dataMap = { 'Temperature': {}, 'Humidity': {}, 'Ambient Light': {} };
-    rows.forEach(item => {
-      if (dataMap[item.sensor_type]) {
-        dataMap[item.sensor_type][item.time_label] = item.avg_value;
-      }
-    });
-
-    const labels = [];
-    const now = new Date();
-
-    if (timeframe === '24h') {
-      for (let i = 23; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
-        const hh = String(d.getHours()).padStart(2, '0');
-        labels.push(`${hh}:00`);
-      }
-    } else if (timeframe === '1h') {
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 5 * 60 * 1000);
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(Math.floor(d.getMinutes() / 5) * 5).padStart(2, '0');
-        labels.push(`${hh}:${mm}`);
-      }
-    }
-
-    mainChart.data.labels = labels;
-    mainChart.data.datasets[0].data = labels.map(lbl => dataMap['Temperature'][lbl] ?? null);
-    mainChart.data.datasets[1].data = labels.map(lbl => dataMap['Humidity'][lbl] ?? null);
-    mainChart.data.datasets[2].data = labels.map(lbl => dataMap['Ambient Light'][lbl] ?? null);
+function initMockChartData() {
+  const now = new Date();
+  for (let i = 7; i >= 0; i--) {
+    const t = new Date(now.getTime() - i * 3000);
+    const hh = String(t.getHours()).padStart(2, '0');
+    const mm = String(t.getMinutes()).padStart(2, '0');
+    const ss = String(t.getSeconds()).padStart(2, '0');
     
-    mainChart.update();
-  } catch (err) {
-    console.error('Lỗi tải dữ liệu lịch sử chart:', err);
+    realtimeChartData.labels.push(`${hh}:${mm}:${ss}`);
+    realtimeChartData.temp.push(Number((28 + Math.random() * 4).toFixed(1)));
+    realtimeChartData.hum.push(Number((65 + Math.random() * 15).toFixed(1)));
+    realtimeChartData.light.push(Math.floor(250 + Math.random() * 350));
   }
-}
 
-async function changeChartTimeframe(type) {
-  currentTimeframe = type;
-  document.querySelectorAll('.btn-time').forEach(btn => btn.classList.remove('active'));
+  mainChart.data.labels = [...realtimeChartData.labels];
+  mainChart.data.datasets[0].data = [...realtimeChartData.temp];
+  mainChart.data.datasets[1].data = [...realtimeChartData.hum];
+  mainChart.data.datasets[2].data = [...realtimeChartData.light];
+  mainChart.update();
 
-  if (type === 'realtime') {
-    document.getElementById('btn-time-realtime').classList.add('active');
-    mainChart.data.labels = [...realtimeChartData.labels];
-    mainChart.data.datasets[0].data = [...realtimeChartData.temp];
-    mainChart.data.datasets[1].data = [...realtimeChartData.hum];
-    mainChart.data.datasets[2].data = [...realtimeChartData.light];
-    mainChart.update();
-  } else {
-    document.getElementById(`btn-time-${type}`).classList.add('active');
-    await loadChartHistory(type);
-  }
+  const lastTemp = realtimeChartData.temp[realtimeChartData.temp.length - 1];
+  const lastHum = realtimeChartData.hum[realtimeChartData.hum.length - 1];
+  const lastLight = realtimeChartData.light[realtimeChartData.light.length - 1];
+
+  const dashTemp = document.getElementById('dash-temp');
+  const dashHum = document.getElementById('dash-hum');
+  const dashLight = document.getElementById('dash-light');
+
+  if (dashTemp) dashTemp.innerHTML = `${lastTemp} <span>°C</span>`;
+  if (dashHum) dashHum.innerHTML = `${lastHum} <span>%</span>`;
+  if (dashLight) dashLight.innerHTML = `${lastLight} <span>Lux</span>`;
 }
 
 function handleToggle(deviceId, isChecked) {
@@ -138,7 +111,7 @@ function handleToggle(deviceId, isChecked) {
   const action = isChecked ? 'ON' : 'OFF';
 
   if (statusText) statusText.innerText = `Status: ${action} (Loading...)`;
-  if (toggle) toggle.disabled = true; 
+  if (toggle) toggle.disabled = true;
 
   socket.emit('send_control', { deviceId, action });
 }
@@ -146,13 +119,29 @@ function handleToggle(deviceId, isChecked) {
 function filterSensorTable(resetPage = true) {
   if (resetPage) currentSensorPage = 1;
 
-  const search = document.getElementById('sensorSearch').value.toLowerCase();
-  const type = document.getElementById('sensorTypeFilter').value;
+  const searchInput = document.getElementById('sensorSearch');
+  const typeFilter = document.getElementById('sensorTypeFilter');
+
+  const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const selectedField = typeFilter ? typeFilter.value : '';
+
+  if (!keyword || !selectedField) {
+    filteredSensors = [...sensorRows];
+    renderSensorPagination();
+    return;
+  }
 
   filteredSensors = sensorRows.filter(row => {
-    const matchType = (type === 'All' || row.type === type);
-    const matchTime = row.time.toLowerCase().includes(search);
-    return matchType && matchTime;
+    if (selectedField === 'Time') {
+      return row.time.toLowerCase().includes(keyword);
+    }
+
+    if (row.type === selectedField) {
+      const numStr = String(row.value).replace(/[^0-9.]/g, '');
+      return numStr.includes(keyword) || row.value.toLowerCase().includes(keyword);
+    }
+
+    return false;
   });
 
   renderSensorPagination();
@@ -303,13 +292,11 @@ socket.on('sensor_telemetry', (data) => {
   realtimeChartData.hum.push(data.humidity);
   realtimeChartData.light.push(data.light);
 
-  if (currentTimeframe === 'realtime') {
-    mainChart.data.labels = [...realtimeChartData.labels];
-    mainChart.data.datasets[0].data = [...realtimeChartData.temp];
-    mainChart.data.datasets[1].data = [...realtimeChartData.hum];
-    mainChart.data.datasets[2].data = [...realtimeChartData.light];
-    mainChart.update();
-  }
+  mainChart.data.labels = [...realtimeChartData.labels];
+  mainChart.data.datasets[0].data = [...realtimeChartData.temp];
+  mainChart.data.datasets[1].data = [...realtimeChartData.hum];
+  mainChart.data.datasets[2].data = [...realtimeChartData.light];
+  mainChart.update();
 
   sensorRows.unshift(
     { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Temperature', value: `${data.temperature} °C`, time: data.time },
@@ -396,4 +383,5 @@ async function loadInitialData() {
 const savedTab = localStorage.getItem('active_iot_tab') || 'dashboard';
 switchTab(savedTab);
 
+initMockChartData();
 loadInitialData();

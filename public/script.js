@@ -1,16 +1,13 @@
-// 1. Cấu hình toàn cục & Kết nối WebSocket
 const socket = io(); 
 
 const ROWS_PER_PAGE = 20; 
 let currentSensorPage = 1; 
 let currentActionPage = 1; 
-
 let sensorRows = []; 
 let actionRows = []; 
 let filteredSensors = []; 
 let filteredActions = []; 
 
-// Chuyển đổi tab điều hướng Single Page Application (SPA)
 function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active')); // Ẩn tất cả tab
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active')); // Tắt sáng các nút sidebar
@@ -24,10 +21,9 @@ function switchTab(tabId) {
   localStorage.setItem('active_iot_tab', tabId);
 }
 
-// Tạo thông báo nổi (Toast Notification) ở góc màn hình
 function showToast(message, type = 'info') {
   let toastContainer = document.getElementById('toastContainer');
-  if (!toastContainer) { // Tự sinh container nếu chưa tồn tại
+  if (!toastContainer) { 
     toastContainer = document.createElement('div');
     toastContainer.id = 'toastContainer';
     toastContainer.className = 'toast-container';
@@ -39,17 +35,14 @@ function showToast(message, type = 'info') {
   toast.innerText = message;
   toastContainer.appendChild(toast);
 
-  // Tự hủy thông báo sau 4 giây
   setTimeout(() => {
     toast.style.opacity = '0';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
-// 2. Trang Dashboard (Cards, Chart.js & Relay Control)
-let currentTimeframe = 'realtime'; // Cờ lưu trạng thái xem biểu đồ
+let currentTimeframe = 'realtime'; 
 
-// Bộ đệm lưu tối đa 8 điểm đo phục vụ hiệu ứng trượt realtime
 const realtimeChartData = {
   labels: [],
   temp: [],
@@ -57,7 +50,6 @@ const realtimeChartData = {
   light: []
 };
 
-// Khởi tạo đồ thị đường đa trục Chart.js
 const ctx = document.getElementById('mainChart').getContext('2d');
 const mainChart = new Chart(ctx, {
   type: 'line',
@@ -82,13 +74,11 @@ const mainChart = new Chart(ctx, {
   }
 });
 
-// Gọi API lấy dữ liệu lịch sử đã gom nhóm AVG từ Database (1h hoặc 24h)
 async function loadChartHistory(timeframe) {
   try {
     const res = await fetch(`/api/sensors/history?range=${timeframe}`);
     const rows = await res.json();
 
-    // Map dữ liệu từ database vào bảng tra cứu
     const dataMap = { 'Temperature': {}, 'Humidity': {}, 'Ambient Light': {} };
     rows.forEach(item => {
       if (dataMap[item.sensor_type]) {
@@ -100,14 +90,12 @@ async function loadChartHistory(timeframe) {
     const now = new Date();
 
     if (timeframe === '24h') {
-      // Tự sinh đủ 24 mốc giờ tính lùi từ giờ hiện tại về 24 tiếng trước
       for (let i = 23; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 60 * 60 * 1000);
         const hh = String(d.getHours()).padStart(2, '0');
         labels.push(`${hh}:00`);
       }
     } else if (timeframe === '1h') {
-      // Tự sinh 12 mốc (mỗi mốc 5 phút) tính lùi trong 1 tiếng qua
       for (let i = 11; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 5 * 60 * 1000);
         const hh = String(d.getHours()).padStart(2, '0');
@@ -116,7 +104,6 @@ async function loadChartHistory(timeframe) {
       }
     }
 
-    // Gán nhãn trục hoành và ánh xạ dữ liệu (khung giờ nào chưa bật mạch sẽ tự nhận null)
     mainChart.data.labels = labels;
     mainChart.data.datasets[0].data = labels.map(lbl => dataMap['Temperature'][lbl] ?? null);
     mainChart.data.datasets[1].data = labels.map(lbl => dataMap['Humidity'][lbl] ?? null);
@@ -128,7 +115,6 @@ async function loadChartHistory(timeframe) {
   }
 }
 
-// Chuyển đổi giữa chế độ realtime trượt và xem lịch sử tổng hợp 1h / 24h từ Database
 async function changeChartTimeframe(type) {
   currentTimeframe = type;
   document.querySelectorAll('.btn-time').forEach(btn => btn.classList.remove('active'));
@@ -146,20 +132,17 @@ async function changeChartTimeframe(type) {
   }
 }
 
-// Gửi lệnh điều khiển công tắc Relay lên máy chủ
 function handleToggle(deviceId, isChecked) {
   const toggle = document.getElementById(`toggle-${deviceId}`);
   const statusText = document.getElementById(`status-text-${deviceId}`);
   const action = isChecked ? 'ON' : 'OFF';
 
-  if (statusText) statusText.innerText = `Status: ${action} (Pending...)`;
-  if (toggle) toggle.disabled = true; // Khóa công tắc chống spam click liên tục
+  if (statusText) statusText.innerText = `Status: ${action} (Loading...)`;
+  if (toggle) toggle.disabled = true; 
 
   socket.emit('send_control', { deviceId, action });
 }
 
-// 3. Trang Sensor Data (Lọc & Phân trang)
-// Lọc dữ liệu mảng sensor theo từ khóa thời gian và loại cảm biến
 function filterSensorTable(resetPage = true) {
   if (resetPage) currentSensorPage = 1;
 
@@ -175,7 +158,6 @@ function filterSensorTable(resetPage = true) {
   renderSensorPagination();
 }
 
-// Cắt dữ liệu 20 bản ghi của trang hiện tại và sinh HTML cho bảng Sensor
 function renderSensorPagination() {
   const tbody = document.getElementById('sensorTableBody');
   tbody.innerHTML = '';
@@ -217,14 +199,11 @@ function renderSensorPagination() {
   if (btnNext) btnNext.disabled = (currentSensorPage >= totalPages || totalEntries === 0);
 }
 
-// Thay đổi chỉ số trang (+1 hoặc -1) khi bấm nút Previous hoặc Next bảng Sensor
 function changeSensorPage(step) {
   currentSensorPage += step;
   renderSensorPagination();
 }
 
-// 4. Trang Action History (Lọc & Phân trang)
-// Lọc mảng lịch sử theo 4 trường điều kiện kết hợp
 function filterActionTable(resetPage = true) {
   if (resetPage) currentActionPage = 1;
 
@@ -244,7 +223,6 @@ function filterActionTable(resetPage = true) {
   renderActionPagination();
 }
 
-// Cắt dữ liệu 20 bản ghi của trang hiện tại và sinh HTML cho bảng Action
 function renderActionPagination() {
   const tbody = document.getElementById('actionTableBody');
   tbody.innerHTML = '';
@@ -287,14 +265,11 @@ function renderActionPagination() {
   if (btnNext) btnNext.disabled = (currentActionPage >= totalPages || totalEntries === 0);
 }
 
-// Thay đổi chỉ số trang (+1 hoặc -1) của bảng Action
 function changeActionPage(step) {
   currentActionPage += step;
   renderActionPagination();
 }
 
-// 5. Lắng nghe sự kiện Socket.io Realtime
-// Nhận dữ liệu telemetry định kỳ từ server
 socket.on('sensor_telemetry', (data) => {
   document.getElementById('dash-temp').innerHTML = `${data.temperature} <span>°C</span>`;
   document.getElementById('dash-hum').innerHTML = `${data.humidity} <span>%</span>`;
@@ -316,7 +291,6 @@ socket.on('sensor_telemetry', (data) => {
     }
   }
 
-  // Thuật toán trượt 8 điểm cho biểu đồ Realtime
   const timeLabel = data.time.split(' ')[1] || data.time;
   if (realtimeChartData.labels.length >= 8) {
     realtimeChartData.labels.shift();
@@ -337,7 +311,6 @@ socket.on('sensor_telemetry', (data) => {
     mainChart.update();
   }
 
-  // Đẩy 3 bản ghi cảm biến mới vào đầu bảng
   sensorRows.unshift(
     { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Temperature', value: `${data.temperature} °C`, time: data.time },
     { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Humidity', value: `${data.humidity} %`, time: data.time },
@@ -346,7 +319,6 @@ socket.on('sensor_telemetry', (data) => {
   filterSensorTable(false);
 });
 
-// Nhận phản hồi trạng thái thực tế từ phần cứng hoặc rollback khi timeout
 socket.on('device_state_sync', (data) => {
   const toggle = document.getElementById(`toggle-${data.deviceId}`);
   const statusText = document.getElementById(`status-text-${data.deviceId}`);
@@ -365,7 +337,6 @@ socket.on('device_state_sync', (data) => {
   }
 });
 
-// Đưa bản ghi thao tác vừa thực hiện vào đầu bảng Action History
 socket.on('action_logged', (data) => {
   actionRows.unshift({
     id: `#ACT-${data.action_id}`,
@@ -378,13 +349,10 @@ socket.on('action_logged', (data) => {
   filterActionTable(false);
 });
 
-// Nhận cảnh báo ngưỡng từ server
 socket.on('alert_trigger', (alert) => {
   showToast(`☀️ ${alert.message}`, 'warning');
 });
 
-// 6. Khởi chạy hệ thống & Nạp dữ liệu ban đầu
-// Tải dữ liệu ban đầu qua REST API và đồng bộ switch
 async function loadInitialData() {
   try {
     const [resSensors, resActions, resDevs] = await Promise.all([

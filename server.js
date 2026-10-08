@@ -25,7 +25,6 @@ function getVNTimeString(date = new Date()) {
   return `${yyyy}-${MM}-${dd} ${hh}:${mm}:${ss}`;
 }
 
-// 1. Kết nối CSDL MySQL
 const pool = mysql.createPool({
   host: 'localhost',
   user: 'root',
@@ -35,12 +34,11 @@ const pool = mysql.createPool({
   connectionLimit: 10
 });
 
-// 2. Cấu hình MQTT Broker HiveMQ & Topic Đồng bộ
 const MQTT_BROKER = 'mqtt://broker.hivemq.com:1883';
-const TOPIC_SENSOR   = 'iot_ptit/data_sensor';
-const TOPIC_CONTROL  = 'iot_ptit/device_control';
-const TOPIC_RESPONSE = 'iot_ptit/device_response';
-const TOPIC_SYNC     = 'iot_ptit/device_sync'; // TOPIC ĐỒNG BỘ TRẠNG THÁI
+const TOPIC_SENSOR   = 'vanh_iot/data_sensor';
+const TOPIC_CONTROL  = 'vanh_iot/device_control';
+const TOPIC_RESPONSE = 'vanh_iot/device_response';
+const TOPIC_SYNC     = 'vanh_iot/device_sync'; 
 
 const mqttClient = mqtt.connect(MQTT_BROKER);
 const pendingActions = new Map();
@@ -50,7 +48,6 @@ mqttClient.on('connect', () => {
   mqttClient.subscribe([TOPIC_SENSOR, TOPIC_RESPONSE, TOPIC_SYNC]);
 });
 
-// Hàm dùng chung để kích hoạt gửi lệnh điều khiển (cho cả Socket và Tự động hóa)
 async function executeDeviceControl(devId, act, origin = 'MANUAL') {
   const currentUserId = 1;
   const timeStr = getVNTimeString();
@@ -59,7 +56,6 @@ async function executeDeviceControl(devId, act, origin = 'MANUAL') {
   const devName = devRows.length ? devRows[0].device_name : `Device ${devId}`;
   const previousStatus = devRows.length ? Number(devRows[0].status) : 0;
 
-  // Ghi nhận bản ghi LOADING vào action_history
   const [ins] = await pool.query(
     'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
     [devId, currentUserId, act, 'LOADING', timeStr]
@@ -73,10 +69,8 @@ async function executeDeviceControl(devId, act, origin = 'MANUAL') {
     executed_at: timeStr
   });
 
-  // Gửi lệnh MQTT đến ESP8266
   mqttClient.publish(TOPIC_CONTROL, JSON.stringify({ deviceId: parseInt(devId), action: act }));
 
-  // Thiết lập Timeout 3.5s kiểm tra phản hồi
   const key = `${devId}_${act}`;
   const timer = setTimeout(async () => {
     if (pendingActions.has(key)) {
@@ -97,10 +91,8 @@ async function executeDeviceControl(devId, act, origin = 'MANUAL') {
         executed_at: failTimeStr
       });
 
-      // KHÔI PHỤC TRẠNG THÁI CŨ TRONG DB NẾU THẤT BẠI
       await pool.query('UPDATE device SET status = ? WHERE device_id = ?', [previousStatus, devId]);
 
-      // ĐỒNG BỘ NÚT BẬT/TẮT TRÊN GIAO DIỆN VỀ TRẠNG THÁI CŨ
       io.emit('device_state_sync', {
         deviceId: parseInt(devId),
         status: previousStatus,
@@ -116,14 +108,12 @@ mqttClient.on('message', async (topic, message) => {
   try {
     const data = JSON.parse(message.toString());
 
-    // 0. ESP8266 VỪA CẮM ĐIỆN VÀ GỬI YÊU CẦU ĐỒNG BỘ LẠI TRẠNG THÁI RELAY
     if (topic === TOPIC_SYNC) {
       console.log('[MQTT Sync Request] ESP8266 connected. Pushing DB device states to board...');
       const [devices] = await pool.query('SELECT device_id, status FROM device');
       
       devices.forEach(dev => {
         const act = Number(dev.status) === 1 ? 'ON' : 'OFF';
-        // Bắn trực tiếp trạng thái hiện tại từ DB xuống để mạch kéo relay tương ứng
         mqttClient.publish(TOPIC_CONTROL, JSON.stringify({
           deviceId: parseInt(dev.device_id),
           action: act
@@ -132,7 +122,6 @@ mqttClient.on('message', async (topic, message) => {
       return;
     }
 
-    // 1. Nhận dữ liệu cảm biến
     if (topic === TOPIC_SENSOR) {
       const { temperature, humidity, light } = data;
       const lightVal = parseInt(light);
@@ -150,7 +139,6 @@ mqttClient.on('message', async (topic, message) => {
         time: timeStr
       });
 
-      // CHỨC NĂNG ALERT VƯỢT NGƯỠNG ÁNH SÁNG (< 50 LUX) & TỰ ĐỘNG BẬT ĐÈN (DEVICE 2)
       const LIGHT_LIMIT = 50;
       if (lightVal < LIGHT_LIMIT) {
         io.emit('alert_trigger', {
@@ -167,7 +155,6 @@ mqttClient.on('message', async (topic, message) => {
       }
     }
 
-    // 2. Nhận phản hồi ACK từ mạch ESP8266
     if (topic === TOPIC_RESPONSE) {
       console.log('[MQTT Response received]:', data);
       const devId = String(data.deviceId);
@@ -210,7 +197,6 @@ mqttClient.on('message', async (topic, message) => {
   }
 });
 
-// 3. Socket.io nhận lệnh điều khiển thủ công từ người dùng
 io.on('connection', (socket) => {
   socket.on('send_control', async (payload) => {
     const devId = String(payload.deviceId);
@@ -219,7 +205,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// 4. REST API Endpoints
 app.get('/api/sensors', async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -260,7 +245,6 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
-// API lấy dữ liệu lịch sử gom nhóm chuẩn 1h hoặc 24h tính lùi từ thời điểm hiện tại
 app.get('/api/sensors/history', async (req, res) => {
   try {
     const range = req.query.range || '24h';
@@ -283,7 +267,6 @@ app.get('/api/sensors/history', async (req, res) => {
       ORDER BY MIN(sd.recorded_at) ASC
     `;
 
-    // Truyền currentVNTime làm mốc neo chuẩn xác để tính lùi thời gian
     const [rows] = await pool.query(query, [currentVNTime, hours, currentVNTime]);
     res.json(rows);
   } catch (e) {

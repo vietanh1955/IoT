@@ -116,42 +116,55 @@ function handleToggle(deviceId, isChecked) {
   socket.emit('send_control', { deviceId, action });
 }
 
-function filterSensorTable(resetPage = true) {
+let totalSensorEntries = 0;
+
+async function filterSensorTable(resetPage = true) {
   if (resetPage) currentSensorPage = 1;
 
   const searchInput = document.getElementById('sensorSearch');
   const typeFilter = document.getElementById('sensorTypeFilter');
 
-  const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const keyword = searchInput ? searchInput.value.trim() : '';
   const selectedField = typeFilter ? typeFilter.value : '';
 
-  if (!keyword || !selectedField) {
-    filteredSensors = [...sensorRows];
-    renderSensorPagination();
-    return;
+  let url = `/api/sensors?page=${currentSensorPage}&limit=${ROWS_PER_PAGE}`;
+  if (keyword && selectedField) {
+    url += `&field=${encodeURIComponent(selectedField)}&keyword=${encodeURIComponent(keyword)}`;
   }
 
-  filteredSensors = sensorRows.filter(row => {
-    if (selectedField === 'Time') {
-      return row.time.toLowerCase().includes(keyword);
+  try {
+    const res = await fetch(url);
+    const result = await res.json();
+
+    if (result.data) {
+      totalSensorEntries = result.total;
+      filteredSensors = result.data.map(s => ({
+        id: `#S${s.data_id}`,
+        type: s.sensor_type,
+        value: `${s.reading_value} ${s.unit || ''}`,
+        time: s.recorded_at || ''
+      }));
+    } else {
+      totalSensorEntries = result.length;
+      filteredSensors = result.map(s => ({
+        id: `#S${s.data_id}`,
+        type: s.sensor_type,
+        value: `${s.reading_value} ${s.unit || ''}`,
+        time: s.recorded_at || ''
+      }));
     }
 
-    if (row.type === selectedField) {
-      const numStr = String(row.value).replace(/[^0-9.]/g, '');
-      return numStr.includes(keyword) || row.value.toLowerCase().includes(keyword);
-    }
-
-    return false;
-  });
-
-  renderSensorPagination();
+    renderSensorPagination();
+  } catch (err) {
+    console.error('Fetch sensors error:', err);
+  }
 }
 
 function renderSensorPagination() {
   const tbody = document.getElementById('sensorTableBody');
   tbody.innerHTML = '';
 
-  const totalEntries = filteredSensors.length;
+  const totalEntries = totalSensorEntries;
   const totalPages = Math.ceil(totalEntries / ROWS_PER_PAGE) || 1;
 
   if (currentSensorPage > totalPages) currentSensorPage = totalPages;
@@ -159,7 +172,7 @@ function renderSensorPagination() {
 
   const startIndex = (currentSensorPage - 1) * ROWS_PER_PAGE;
   const endIndex = Math.min(startIndex + ROWS_PER_PAGE, totalEntries);
-  const pageItems = filteredSensors.slice(startIndex, endIndex);
+  const pageItems = filteredSensors;
 
   if (pageItems.length === 0) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:20px;">Không có dữ liệu phù hợp</td></tr>`;
@@ -189,42 +202,83 @@ function renderSensorPagination() {
 }
 
 function changeSensorPage(step) {
-  currentSensorPage += step;
-  renderSensorPagination();
+  const totalPages = Math.ceil(totalSensorEntries / ROWS_PER_PAGE) || 1;
+  const targetPage = currentSensorPage + step;
+  if (targetPage >= 1 && targetPage <= totalPages) {
+    currentSensorPage = targetPage;
+    filterSensorTable(false);
+  }
 }
 
-function filterActionTable(resetPage = true) {
+let totalActionEntries = 0;
+
+async function filterActionTable(resetPage = true) {
   if (resetPage) currentActionPage = 1;
 
-  const search = document.getElementById('actionSearch').value.toLowerCase();
-  const dev = document.getElementById('actionDeviceFilter').value;
-  const act = document.getElementById('actionTypeFilter').value;
-  const status = document.getElementById('actionStatusFilter').value;
+  const searchInput = document.getElementById('actionSearch');
+  const devFilter = document.getElementById('actionDeviceFilter');
+  const actFilter = document.getElementById('actionTypeFilter');
+  const statusFilter = document.getElementById('actionStatusFilter');
 
-  filteredActions = actionRows.filter(row => {
-    const matchTime = row.time.toLowerCase().includes(search);
-    const matchDev = (dev === 'All' || row.device === dev);
-    const matchAct = (act === 'All' || row.action === act);
-    const matchStatus = (status === 'All' || row.status === status);
-    return matchTime && matchDev && matchAct && matchStatus;
-  });
+  const keyword = searchInput ? searchInput.value.trim() : '';
+  const dev = devFilter ? devFilter.value : 'All';
+  const act = actFilter ? actFilter.value : 'All';
+  const status = statusFilter ? statusFilter.value : 'All';
 
-  renderActionPagination();
+  let url = `/api/actions?page=${currentActionPage}&limit=${ROWS_PER_PAGE}&device=${encodeURIComponent(dev)}&action=${encodeURIComponent(act)}&status=${encodeURIComponent(status)}`;
+  if (keyword) {
+    url += `&keyword=${encodeURIComponent(keyword)}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    const result = await res.json();
+
+    if (result.data) {
+      totalActionEntries = result.total;
+      filteredActions = result.data.map(a => ({
+        id: `#ACT-${a.action_id}`,
+        action_id: a.action_id,
+        device: a.device_name,
+        action: a.action,
+        status: a.status,
+        time: a.executed_at || ''
+      }));
+    } else {
+      totalActionEntries = result.length;
+      filteredActions = result.map(a => ({
+        id: `#ACT-${a.action_id}`,
+        action_id: a.action_id,
+        device: a.device_name,
+        action: a.action,
+        status: a.status,
+        time: a.executed_at || ''
+      }));
+    }
+
+    renderActionPagination();
+  } catch (err) {
+    console.error('Fetch actions error:', err);
+  }
 }
 
 function renderActionPagination() {
   const tbody = document.getElementById('actionTableBody');
   tbody.innerHTML = '';
 
-  const totalEntries = filteredActions.length;
+  const totalEntries = totalActionEntries;
   const totalPages = Math.ceil(totalEntries / ROWS_PER_PAGE) || 1;
 
   if (currentActionPage > totalPages) currentActionPage = totalPages;
   if (currentActionPage < 1) currentActionPage = 1;
 
-  const startIndex = (currentActionPage - 1) * ROWS_PER_PAGE;
-  const endIndex = Math.min(startIndex + ROWS_PER_PAGE, totalEntries);
-  const pageItems = filteredActions.slice(startIndex, endIndex);
+  const pageItems = filteredActions.length > ROWS_PER_PAGE 
+    ? filteredActions.slice(0, ROWS_PER_PAGE) 
+    : filteredActions;
+
+  const currentCount = pageItems.length;
+  const startIndex = totalEntries > 0 ? (currentActionPage - 1) * ROWS_PER_PAGE + 1 : 0;
+  const endIndex = totalEntries > 0 ? (startIndex + currentCount - 1) : 0;
 
   if (pageItems.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">Không có dữ liệu phù hợp</td></tr>`;
@@ -248,15 +302,19 @@ function renderActionPagination() {
   const btnPrev = document.getElementById('actionBtnPrev');
   const btnNext = document.getElementById('actionBtnNext');
 
-  if (infoEl) infoEl.innerText = totalEntries > 0 ? `Showing ${startIndex + 1}-${endIndex} of ${totalEntries} entries` : 'Showing 0 of 0 entries';
+  if (infoEl) infoEl.innerText = totalEntries > 0 ? `Showing ${startIndex}-${endIndex} of ${totalEntries} entries` : 'Showing 0 of 0 entries';
   if (pageEl) pageEl.innerText = currentActionPage;
   if (btnPrev) btnPrev.disabled = (currentActionPage <= 1);
   if (btnNext) btnNext.disabled = (currentActionPage >= totalPages || totalEntries === 0);
 }
 
 function changeActionPage(step) {
-  currentActionPage += step;
-  renderActionPagination();
+  const totalPages = Math.ceil(totalActionEntries / ROWS_PER_PAGE) || 1;
+  const targetPage = currentActionPage + step;
+  if (targetPage >= 1 && targetPage <= totalPages) {
+    currentActionPage = targetPage;
+    filterActionTable(false);
+  }
 }
 
 socket.on('sensor_telemetry', (data) => {
@@ -342,39 +400,22 @@ socket.on('alert_trigger', (alert) => {
 
 async function loadInitialData() {
   try {
-    const [resSensors, resActions, resDevs] = await Promise.all([
-      fetch('/api/sensors').then(r => r.json()),
-      fetch('/api/actions').then(r => r.json()),
-      fetch('/api/devices').then(r => r.json())
+    await Promise.all([
+      filterSensorTable(),
+      filterActionTable()
     ]);
 
-    sensorRows = resSensors.map(s => ({
-      id: `#S${s.data_id}`,
-      type: s.sensor_type,
-      value: `${s.reading_value} ${s.unit || ''}`,
-      time: s.recorded_at || ''
-    }));
+    const resDevs = await fetch('/api/devices').then(r => r.json());
+    if (Array.isArray(resDevs)) {
+      resDevs.forEach(dev => {
+        const toggle = document.getElementById(`toggle-${dev.device_id}`);
+        const statusText = document.getElementById(`status-text-${dev.device_id}`);
+        const isOn = Number(dev.status) === 1;
 
-    actionRows = resActions.map(a => ({
-      id: `#ACT-${a.action_id}`,
-      action_id: a.action_id,
-      device: a.device_name,
-      action: a.action,
-      status: a.status,
-      time: a.executed_at || ''
-    }));
-
-    resDevs.forEach(dev => {
-      const toggle = document.getElementById(`toggle-${dev.device_id}`);
-      const statusText = document.getElementById(`status-text-${dev.device_id}`);
-      const isOn = Number(dev.status) === 1;
-
-      if (toggle) toggle.checked = isOn;
-      if (statusText) statusText.innerText = `Status: ${isOn ? 'ON' : 'OFF'}`;
-    });
-
-    filterSensorTable();
-    filterActionTable();
+        if (toggle) toggle.checked = isOn;
+        if (statusText) statusText.innerText = `Status: ${isOn ? 'ON' : 'OFF'}`;
+      });
+    }
   } catch (err) {
     console.error('Fetch error:', err);
   }

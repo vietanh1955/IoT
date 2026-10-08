@@ -207,14 +207,51 @@ io.on('connection', (socket) => {
 
 app.get('/api/sensors', async (req, res) => {
   try {
-    const [rows] = await pool.query(`
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    const field = req.query.field || '';
+    const keyword = req.query.keyword ? req.query.keyword.trim() : '';
+
+    let whereClause = '';
+    const params = [];
+
+    if (field && keyword) {
+      if (field === 'Time') {
+        whereClause = 'WHERE DATE_FORMAT(sd.recorded_at, "%Y-%m-%d %H:%i:%s") LIKE ?';
+        params.push(`%${keyword}%`);
+      } else if (['Temperature', 'Humidity', 'Ambient Light'].includes(field)) {
+        whereClause = 'WHERE s.sensor_type = ? AND CAST(sd.reading_value AS CHAR) LIKE ?';
+        params.push(field, `%${keyword}%`);
+      }
+    }
+
+    const countSql = `
+      SELECT COUNT(*) AS total 
+      FROM sensor_data sd 
+      JOIN sensor s ON sd.sensor_id = s.sensor_id 
+      ${whereClause}
+    `;
+    const [countRows] = await pool.query(countSql, params);
+    const totalEntries = countRows[0].total;
+
+    const dataSql = `
       SELECT sd.data_id, s.sensor_type, s.unit, sd.reading_value, 
              DATE_FORMAT(sd.recorded_at, '%Y-%m-%d %H:%i:%s') AS recorded_at
       FROM sensor_data sd
       JOIN sensor s ON sd.sensor_id = s.sensor_id
-      ORDER BY sd.data_id DESC LIMIT 50
-    `);
-    res.json(rows);
+      ${whereClause}
+      ORDER BY sd.data_id DESC 
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    const [rows] = await pool.query(dataSql, params);
+
+    res.json({
+      total: totalEntries,
+      page,
+      limit,
+      data: rows
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -222,16 +259,67 @@ app.get('/api/sensors', async (req, res) => {
 
 app.get('/api/actions', async (req, res) => {
   try {
-    const [rows] = await pool.query(`
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const device = req.query.device || 'All';
+    const action = req.query.action || 'All';
+    const status = req.query.status || 'All';
+    const keyword = req.query.keyword ? req.query.keyword.trim() : '';
+
+    const conditions = [];
+    const params = [];
+
+    if (device !== 'All') {
+      conditions.push('d.device_name = ?');
+      params.push(device);
+    }
+    if (action !== 'All') {
+      conditions.push('ah.action = ?');
+      params.push(action);
+    }
+    if (status !== 'All') {
+      conditions.push('ah.status = ?');
+      params.push(status);
+    }
+    if (keyword) {
+      conditions.push('DATE_FORMAT(ah.executed_at, "%Y-%m-%d %H:%i:%s") LIKE ?');
+      params.push(`%${keyword}%`);
+    }
+
+    const whereClause = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM action_history ah
+      JOIN device d ON ah.device_id = d.device_id
+      JOIN \`user\` u ON ah.user_id = u.user_id
+      ${whereClause}
+    `;
+    const [countRows] = await pool.query(countSql, params);
+    const totalEntries = countRows[0].total;
+
+    const dataSql = `
       SELECT ah.action_id, d.device_name, u.user_name, ah.action, ah.status, 
              DATE_FORMAT(ah.executed_at, '%Y-%m-%d %H:%i:%s') AS executed_at
       FROM action_history ah
       JOIN device d ON ah.device_id = d.device_id
       JOIN \`user\` u ON ah.user_id = u.user_id
-      ORDER BY ah.action_id DESC LIMIT 50
-    `);
-    res.json(rows);
+      ${whereClause}
+      ORDER BY ah.action_id DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    const [rows] = await pool.query(dataSql, params);
+
+    res.json({
+      total: totalEntries,
+      page,
+      limit,
+      data: rows
+    });
   } catch (e) {
+    console.error('Lỗi SQL Actions:', e);
     res.status(500).json({ error: e.message });
   }
 });

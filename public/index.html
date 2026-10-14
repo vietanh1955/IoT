@@ -8,26 +8,23 @@
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-  <!-- Sidebar -->
+
   <aside class="sidebar">
     <div class="logo">IoT Home</div>
     <nav>
-      <button class="nav-btn active" onclick="switchTab('dashboard')">🏠 Dashboard</button>
-      <button class="nav-btn" onclick="switchTab('sensor')">📊 Data Sensor</button>
-      <button class="nav-btn" onclick="switchTab('history')">⚡ Action History</button>
-      <button class="nav-btn" onclick="switchTab('profile')">👤 Profile</button>
+      <button class="nav-btn active" onclick="switchTab('dashboard')">Dashboard</button>
+      <button class="nav-btn" onclick="switchTab('sensor')">Data Sensor</button>
+      <button class="nav-btn" onclick="switchTab('history')">Action History</button>
+      <button class="nav-btn" onclick="switchTab('profile')">Profile</button>
     </nav>
   </aside>
 
-  <!-- Main Content -->
   <main class="content">
     
-    <!-- TAB 1: DASHBOARD -->
     <section id="dashboard" class="tab-content active">
       <div class="header">
         <div>
           <h2>Telemetry Console</h2>
-          <p>Live sensor feed and operational relay controllers.</p>
         </div>
       </div>
       <div class="cards">
@@ -51,7 +48,7 @@
         <div class="chart-header">
           <h3>24-Hour Analytics</h3>
         </div>
-        <div style="height: 260px;">
+        <div style="height: 310px;">
           <canvas id="mainChart"></canvas>
         </div>
       </div>
@@ -60,8 +57,7 @@
         <div class="relays">
           <div class="relay-card">
             <div>
-              <h4>Relay Fan 01</h4>
-              <p>Primary cooling node</p>
+              <h4>Relay Fan</h4>
               <span class="status-label" id="status-text-1">Status: OFF</span>
             </div>
             <label class="switch">
@@ -71,8 +67,7 @@
           </div>
           <div class="relay-card">
             <div>
-              <h4>Relay Light 01</h4>
-              <p>Chamber illumination array</p>
+              <h4>Relay Light</h4>
               <span class="status-label" id="status-text-2">Status: OFF</span>
             </div>
             <label class="switch">
@@ -84,7 +79,6 @@
       </div>
     </section>
 
-    <!-- TAB 2: DATA SENSOR -->
     <section id="sensor" class="tab-content">
       <div class="header">
         <h2>Sensor Logs & Archive</h2>
@@ -92,7 +86,8 @@
       <div class="table-container">
         <div class="filters">
           <input type="text" id="sensorSearch" placeholder="Search" oninput="filterSensorTable()">
-          <select id="sensorTypeFilter" onchange="filterSensorTable()">
+          <select id="sensorTypeFilter" onchange="onSensorTypeChange()">
+            <option value="All" selected>All</option>
             <option value="Temperature">Temperature</option>
             <option value="Humidity">Humidity</option>
             <option value="Ambient Light">Ambient Light</option>
@@ -106,7 +101,20 @@
           <tbody id="sensorTableBody"></tbody>
         </table>
         <div class="pagination-container">
-          <span id="sensorPageInfo">Showing 1-20 of 0 entries</span>
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <span id="sensorPageInfo">Showing 1-20 of 0 entries</span>
+            <div class="page-size-selector">
+              <span>Show:</span>
+              <select id="sensorPageSelect" onchange="onSensorPageSizeChange(this.value)">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="30">30</option>
+                <option value="custom">Custom...</option>
+              </select>
+              <input type="number" id="sensorCustomLimit" min="1" max="500" placeholder="Số dòng" style="display: none;" onchange="onSensorCustomLimitChange(this.value)">
+              <span>entries</span>
+            </div>
+          </div>
           <div class="pagination-buttons">
             <button class="btn-page" id="sensorBtnPrev" onclick="changeSensorPage(-1)">Previous</button>
             <span class="page-current" id="sensorPageCurrent">1</span>
@@ -116,7 +124,6 @@
       </div>
     </section>
 
-    <!-- TAB 3: ACTION HISTORY -->
     <section id="history" class="tab-content">
       <div class="header">
         <h2>Action History</h2>
@@ -148,7 +155,20 @@
           <tbody id="actionTableBody"></tbody>
         </table>
         <div class="pagination-container">
-          <span id="actionPageInfo">Showing 1-20 of 0 entries</span>
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <span id="actionPageInfo">Showing 1-20 of 0 entries</span>
+            <div class="page-size-selector">
+              <span>Show:</span>
+              <select id="actionPageSelect" onchange="onActionPageSizeChange(this.value)">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="30">30</option>
+                <option value="custom">Custom...</option>
+              </select>
+              <input type="number" id="actionCustomLimit" min="1" max="500" placeholder="Số dòng" style="display: none;" onchange="onActionCustomLimitChange(this.value)">
+              <span>entries</span>
+            </div>
+          </div>
           <div class="pagination-buttons">
             <button class="btn-page" id="actionBtnPrev" onclick="changeActionPage(-1)">Previous</button>
             <span class="page-current" id="actionPageCurrent">1</span>
@@ -158,7 +178,6 @@
       </div>
     </section>
 
-<!-- TAB 4: PROFILE -->
     <section id="profile" class="tab-content">
       <div class="header">
         <div>
@@ -167,7 +186,7 @@
       </div>
       <div class="profile-grid">
         <div class="profile-card text-center">
-          <div class="avatar">👤</div>
+          <div class="avatar"><img src="avatar.png" alt="Trần Việt Anh Avatar"></div>
           <h3>Trần Việt Anh</h3>
           <span class="badge badge-blue">B23DCAT021</span>
           <div class="profile-details">
@@ -179,13 +198,14 @@
           <h4>ACADEMIC DETAILS</h4>
           <table class="info-table">
             <tr><td>Class</td><td>D23CQAT01-B</td></tr>
-            <tr><td>Academic Email</td><td class="text-blue">B23AT021@stu.ptit.edu.vn</td></tr>
+            <tr><td>Academic Email</td><td>B23AT021@stu.ptit.edu.vn</td></tr>
             <tr><td>Institution Office</td><td>Posts and Telecommunications Institute of Technology (PTIT)</td></tr>
           </table>
 
           <h4 class="mt-20">PROJECT LINKS</h4>
           <a href="https://github.com" target="_blank" class="link-btn">GitHub Repository</a>
-          <a href="https://www.figma.com" target="_blank" class="link-btn">Link Figma</a>
+          <a href="https://www.figma.com/design/pCoMeVKZrD8DkV1xGAvsl9/IoT-ver2?node-id=0-1&m=dev&t=i08tNi9jCdl1D4qF-1  " target="_blank" class="link-btn">Link Figma</a>
+          <a href="/api-docs" target="_blank" class="link-btn">API Documentation</a>
           <a href="/report.pdf" target="_blank" class="link-btn">PDF Báo Cáo Đồ Án</a>
           
           <h4 class="mt-20">TECH STACK</h4>

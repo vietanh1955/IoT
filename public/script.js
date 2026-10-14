@@ -1,12 +1,83 @@
 const socket = io();
 
-const ROWS_PER_PAGE = 20;
+let sensorPageSize = 20;
+let actionPageSize = 20;
 let currentSensorPage = 1;
 let currentActionPage = 1;
 let sensorRows = [];
 let actionRows = [];
 let filteredSensors = [];
 let filteredActions = [];
+let totalSensorEntries = 0;
+let totalActionEntries = 0;
+
+const realtimeChartData = {
+  labels: [],
+  temp: [],
+  hum: [],
+  light: []
+};
+
+const ctx = document.getElementById('mainChart').getContext('2d');
+const mainChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Temp (°C)',
+        data: [],
+        borderColor: '#EF4444',
+        backgroundColor: '#EF4444',
+        tension: 0.3,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Humidity (%)',
+        data: [],
+        borderColor: '#38BDF8',
+        backgroundColor: '#38BDF8',
+        tension: 0.3,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Light (Lux)',
+        data: [],
+        borderColor: '#F59E0B',
+        backgroundColor: '#F59E0B',
+        tension: 0.3,
+        yAxisID: 'yLight'
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        grid: { color: '#334155' },
+        ticks: { color: '#94A3B8' }
+      },
+      y: {
+        position: 'left',
+        min: 0,
+        max: 100,
+        grid: { color: '#334155' },
+        ticks: { color: '#94A3B8' }
+      },
+      yLight: {
+        position: 'right',
+        min: 0,
+        max: 1000,
+        grid: { drawOnChartArea: false },
+        ticks: { color: '#94A3B8' }
+      }
+    },
+    plugins: {
+      legend: { labels: { color: '#F8FAFC' } }
+    }
+  }
+});
 
 function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -40,37 +111,6 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
-
-const realtimeChartData = {
-  labels: [],
-  temp: [],
-  hum: [],
-  light: []
-};
-
-const ctx = document.getElementById('mainChart').getContext('2d');
-const mainChart = new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels: [],
-    datasets: [
-      { label: 'Temp (°C)', data: [], borderColor: '#EF4444', backgroundColor: '#EF4444', tension: 0.3 },
-      { label: 'Humidity (%)', data: [], borderColor: '#38BDF8', backgroundColor: '#38BDF8', tension: 0.3 },
-      { label: 'Light (Lux)', data: [], borderColor: '#F59E0B', backgroundColor: '#F59E0B', tension: 0.3 }
-    ]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: { grid: { color: '#334155' }, ticks: { color: '#94A3B8' } },
-      x: { grid: { color: '#334155' }, ticks: { color: '#94A3B8' } }
-    },
-    plugins: {
-      legend: { labels: { color: '#F8FAFC' } }
-    }
-  }
-});
 
 function initMockChartData() {
   const now = new Date();
@@ -108,15 +148,36 @@ function initMockChartData() {
 function handleToggle(deviceId, isChecked) {
   const toggle = document.getElementById(`toggle-${deviceId}`);
   const statusText = document.getElementById(`status-text-${deviceId}`);
+  const switchLabel = toggle ? toggle.closest('.switch') : null;
   const action = isChecked ? 'ON' : 'OFF';
 
-  if (statusText) statusText.innerText = `Status: ${action} (Loading...)`;
+  if (statusText) {
+    statusText.innerText = `Status: ${action} (Loading...)`;
+  }
+
   if (toggle) toggle.disabled = true;
+  if (switchLabel) switchLabel.classList.add('loading');
 
   socket.emit('send_control', { deviceId, action });
 }
 
-let totalSensorEntries = 0;
+function onSensorTypeChange() {
+  const typeFilter = document.getElementById('sensorTypeFilter');
+  const searchInput = document.getElementById('sensorSearch');
+  
+  if (typeFilter && searchInput) {
+    const val = typeFilter.value;
+    if (val === 'All') {
+      searchInput.placeholder = 'Search';
+    } else if (val === 'Time') {
+      searchInput.placeholder = 'Search by time (YYYY-MM-DD hh:mm:ss)...';
+    } else {
+      searchInput.placeholder = `Search by ${val} values...`;
+    }
+  }
+
+  filterSensorTable(true);
+}
 
 async function filterSensorTable(resetPage = true) {
   if (resetPage) currentSensorPage = 1;
@@ -127,9 +188,9 @@ async function filterSensorTable(resetPage = true) {
   const keyword = searchInput ? searchInput.value.trim() : '';
   const selectedField = typeFilter ? typeFilter.value : '';
 
-  let url = `/api/sensors?page=${currentSensorPage}&limit=${ROWS_PER_PAGE}`;
-  if (keyword && selectedField) {
-    url += `&field=${encodeURIComponent(selectedField)}&keyword=${encodeURIComponent(keyword)}`;
+  let url = `/api/sensors?page=${currentSensorPage}&limit=${sensorPageSize}`;
+  if (keyword) {
+    url += `&field=${encodeURIComponent(selectedField || 'All')}&keyword=${encodeURIComponent(keyword)}`;
   }
 
   try {
@@ -160,18 +221,40 @@ async function filterSensorTable(resetPage = true) {
   }
 }
 
+function onSensorPageSizeChange(val) {
+  const customInput = document.getElementById('sensorCustomLimit');
+  if (val === 'custom') {
+    if (customInput) {
+      customInput.style.display = 'inline-block';
+      customInput.value = sensorPageSize;
+      customInput.focus();
+    }
+  } else {
+    if (customInput) customInput.style.display = 'none';
+    sensorPageSize = parseInt(val, 10);
+    filterSensorTable(true);
+  }
+}
+
+function onSensorCustomLimitChange(val) {
+  let num = parseInt(val, 10);
+  if (isNaN(num) || num <= 0) num = 20;
+  sensorPageSize = num;
+  filterSensorTable(true);
+}
+
 function renderSensorPagination() {
   const tbody = document.getElementById('sensorTableBody');
   tbody.innerHTML = '';
 
   const totalEntries = totalSensorEntries;
-  const totalPages = Math.ceil(totalEntries / ROWS_PER_PAGE) || 1;
+  const totalPages = Math.ceil(totalEntries / sensorPageSize) || 1;
 
   if (currentSensorPage > totalPages) currentSensorPage = totalPages;
   if (currentSensorPage < 1) currentSensorPage = 1;
 
-  const startIndex = (currentSensorPage - 1) * ROWS_PER_PAGE;
-  const endIndex = Math.min(startIndex + ROWS_PER_PAGE, totalEntries);
+  const startIndex = (currentSensorPage - 1) * sensorPageSize;
+  const endIndex = Math.min(startIndex + sensorPageSize, totalEntries);
   const pageItems = filteredSensors;
 
   if (pageItems.length === 0) {
@@ -202,7 +285,7 @@ function renderSensorPagination() {
 }
 
 function changeSensorPage(step) {
-  const totalPages = Math.ceil(totalSensorEntries / ROWS_PER_PAGE) || 1;
+  const totalPages = Math.ceil(totalSensorEntries / sensorPageSize) || 1;
   const targetPage = currentSensorPage + step;
   if (targetPage >= 1 && targetPage <= totalPages) {
     currentSensorPage = targetPage;
@@ -210,7 +293,27 @@ function changeSensorPage(step) {
   }
 }
 
-let totalActionEntries = 0;
+function onActionPageSizeChange(val) {
+  const customInput = document.getElementById('actionCustomLimit');
+  if (val === 'custom') {
+    if (customInput) {
+      customInput.style.display = 'inline-block';
+      customInput.value = actionPageSize;
+      customInput.focus();
+    }
+  } else {
+    if (customInput) customInput.style.display = 'none';
+    actionPageSize = parseInt(val, 10);
+    filterActionTable(true);
+  }
+}
+
+function onActionCustomLimitChange(val) {
+  let num = parseInt(val, 10);
+  if (isNaN(num) || num <= 0) num = 20;
+  actionPageSize = num;
+  filterActionTable(true);
+}
 
 async function filterActionTable(resetPage = true) {
   if (resetPage) currentActionPage = 1;
@@ -225,7 +328,7 @@ async function filterActionTable(resetPage = true) {
   const act = actFilter ? actFilter.value : 'All';
   const status = statusFilter ? statusFilter.value : 'All';
 
-  let url = `/api/actions?page=${currentActionPage}&limit=${ROWS_PER_PAGE}&device=${encodeURIComponent(dev)}&action=${encodeURIComponent(act)}&status=${encodeURIComponent(status)}`;
+  let url = `/api/actions?page=${currentActionPage}&limit=${actionPageSize}&device=${encodeURIComponent(dev)}&action=${encodeURIComponent(act)}&status=${encodeURIComponent(status)}`;
   if (keyword) {
     url += `&keyword=${encodeURIComponent(keyword)}`;
   }
@@ -267,17 +370,17 @@ function renderActionPagination() {
   tbody.innerHTML = '';
 
   const totalEntries = totalActionEntries;
-  const totalPages = Math.ceil(totalEntries / ROWS_PER_PAGE) || 1;
+  const totalPages = Math.ceil(totalEntries / actionPageSize) || 1;
 
   if (currentActionPage > totalPages) currentActionPage = totalPages;
   if (currentActionPage < 1) currentActionPage = 1;
 
-  const pageItems = filteredActions.length > ROWS_PER_PAGE 
-    ? filteredActions.slice(0, ROWS_PER_PAGE) 
+  const pageItems = filteredActions.length > actionPageSize 
+    ? filteredActions.slice(0, actionPageSize) 
     : filteredActions;
 
   const currentCount = pageItems.length;
-  const startIndex = totalEntries > 0 ? (currentActionPage - 1) * ROWS_PER_PAGE + 1 : 0;
+  const startIndex = totalEntries > 0 ? (currentActionPage - 1) * actionPageSize + 1 : 0;
   const endIndex = totalEntries > 0 ? (startIndex + currentCount - 1) : 0;
 
   if (pageItems.length === 0) {
@@ -309,7 +412,7 @@ function renderActionPagination() {
 }
 
 function changeActionPage(step) {
-  const totalPages = Math.ceil(totalActionEntries / ROWS_PER_PAGE) || 1;
+  const totalPages = Math.ceil(totalActionEntries / actionPageSize) || 1;
   const targetPage = currentActionPage + step;
   if (targetPage >= 1 && targetPage <= totalPages) {
     currentActionPage = targetPage;
@@ -367,7 +470,10 @@ socket.on('sensor_telemetry', (data) => {
 socket.on('device_state_sync', (data) => {
   const toggle = document.getElementById(`toggle-${data.deviceId}`);
   const statusText = document.getElementById(`status-text-${data.deviceId}`);
+  const switchLabel = toggle ? toggle.closest('.switch') : null;
   const isOn = Number(data.status) === 1;
+
+  if (switchLabel) switchLabel.classList.remove('loading');
 
   if (toggle) {
     toggle.disabled = false;

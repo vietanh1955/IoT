@@ -28,7 +28,6 @@ body { display: flex; height: 100vh; background-color: var(--bg-main); color: va
 
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .header h2 { font-size: 24px; font-weight: 700; }
-.header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
 
 body:has(#dashboard.active) .content { overflow-y: hidden !important; }
 #dashboard .header { margin-bottom: 10px; }
@@ -50,9 +49,6 @@ body:has(#dashboard.active) .content { overflow-y: hidden !important; }
 
 .chart-container { background: var(--bg-card); padding: 22px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 25px; }
 .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.chart-time-tabs { display: flex; gap: 8px; background: var(--bg-main); padding: 4px; border-radius: 6px; border: 1px solid var(--border); }
-.btn-time { background: none; border: none; color: var(--text-muted); padding: 4px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; }
-.btn-time.active { background: var(--bg-card); color: var(--text-main); }
 
 .relays-section h3 { font-size: 16px; margin-bottom: 15px; }
 .relays { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
@@ -119,5 +115,6 @@ th { color: var(--text-muted); font-size: 12px; font-weight: 600; }
 
 .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
 .toast-item { min-width: 280px; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); transition: opacity 0.3s ease; }
+.toast-info { background-color: #0c4a6e; border: 1px solid var(--accent-blue); color: #e0f2fe; }
 .toast-warning { background-color: #78350F; border: 1px solid var(--accent-yellow); color: #FEF3C7; }
 .toast-error { background-color: #7F1D1D; border: 1px solid var(--accent-red); color: #FEE2E2; }

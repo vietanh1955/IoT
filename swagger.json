@@ -1,0 +1,75 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "IoT Dashboard API Documentation",
+    "version": "1.0.0",
+    "description": "Tài liệu API hệ thống IoT Dashboard: Cảm biến, Điều khiển và Trạng thái thiết bị."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local Server"
+    }
+  ],
+  "tags": [
+    { "name": "Sensors", "description": "Dữ liệu cảm biến" },
+    { "name": "Actions", "description": "Lịch sử thao tác thiết bị" },
+    { "name": "Devices", "description": "Quản lý thiết bị" }
+  ],
+  "paths": {
+    "/api/sensors": {
+      "get": {
+        "tags": ["Sensors"],
+        "summary": "Lấy dữ liệu cảm biến (phân trang & tìm kiếm)",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 }, "description": "Số trang" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 }, "description": "Số bản ghi" },
+          { "name": "field", "in": "query", "schema": { "type": "string", "enum": ["Time", "Temperature", "Humidity", "Ambient Light"] }, "description": "Trường cần tìm" },
+          { "name": "keyword", "in": "query", "schema": { "type": "string" }, "description": "Từ khóa tìm kiếm" }
+        ],
+        "responses": {
+          "200": { "description": "Thành công" },
+          "500": { "description": "Lỗi máy chủ" }
+        }
+      }
+    },
+    "/api/sensors/history": {
+      "get": {
+        "tags": ["Sensors"],
+        "summary": "Dữ liệu lịch sử vẽ biểu đồ",
+        "parameters": [
+          { "name": "range", "in": "query", "schema": { "type": "string", "enum": ["1h", "24h"], "default": "24h" }, "description": "Khoảng thời gian (1h hoặc 24h)" }
+        ],
+        "responses": {
+          "200": { "description": "Thành công" }
+        }
+      }
+    },
+    "/api/actions": {
+      "get": {
+        "tags": ["Actions"],
+        "summary": "Lịch sử thao tác thiết bị",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "device", "in": "query", "schema": { "type": "string", "default": "All" }, "description": "Tên thiết bị" },
+          { "name": "action", "in": "query", "schema": { "type": "string", "enum": ["All", "ON", "OFF"], "default": "All" } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["All", "SUCCESS", "FAILED", "LOADING"], "default": "All" } },
+          { "name": "keyword", "in": "query", "schema": { "type": "string" }, "description": "Tìm theo ngày giờ" }
+        ],
+        "responses": {
+          "200": { "description": "Thành công" }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "tags": ["Devices"],
+        "summary": "Danh sách thiết bị hiện tại",
+        "responses": {
+          "200": { "description": "Thành công" }
+        }
+      }
+    }
+  }
+}

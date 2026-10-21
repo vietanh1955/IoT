@@ -1,5 +1,4 @@
 const pool = require('../config/db');
-const { getVNTimeString } = require('../utils/timeUtil');
 
 exports.getSensors = async (req, res) => {
   try {
@@ -48,35 +47,6 @@ exports.getSensors = async (req, res) => {
       limit,
       data: rows
     });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-};
-
-exports.getSensorHistory = async (req, res) => {
-  try {
-    const range = req.query.range || '24h';
-    const hours = range === '1h' ? 1 : 24;
-    const currentVNTime = getVNTimeString();
-    const timePattern = range === '1h' 
-      ? "CONCAT(DATE_FORMAT(sd.recorded_at, '%H:'), LPAD(FLOOR(MINUTE(sd.recorded_at) / 5) * 5, 2, '0'))" 
-      : "DATE_FORMAT(sd.recorded_at, '%H:00')";
-
-    const query = `
-      SELECT 
-        ${timePattern} AS time_label,
-        s.sensor_type,
-        ROUND(AVG(sd.reading_value), 1) AS avg_value
-      FROM sensor_data sd
-      JOIN sensor s ON sd.sensor_id = s.sensor_id
-      WHERE sd.recorded_at >= (STR_TO_DATE(?, '%Y-%m-%d %H:%i:%s') - INTERVAL ? HOUR)
-        AND sd.recorded_at <= STR_TO_DATE(?, '%Y-%m-%d %H:%i:%s')
-      GROUP BY time_label, s.sensor_type
-      ORDER BY MIN(sd.recorded_at) ASC
-    `;
-
-    const [rows] = await pool.query(query, [currentVNTime, hours, currentVNTime]);
-    res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

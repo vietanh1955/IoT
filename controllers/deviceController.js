@@ -36,6 +36,10 @@ exports.controlDevice = async (req, res) => {
       });
     } else {
       console.warn('[MQTT Warn] Broker chua connected, khong the publish!');
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Lỗi: MQTT Broker chưa kết nối, không thể điều khiển thiết bị!' 
+      });
     }
 
     console.log(`[Device Control] User ${req.user.username} set Device ${deviceId} to ${action}`);

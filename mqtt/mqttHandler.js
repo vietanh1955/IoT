@@ -34,28 +34,19 @@ module.exports = function initMqttHandler(io) {
       }
 
       if (topic === TOPIC_SENSOR) {
-        const tempVal  = parseFloat(data.temperature) || 0;
-        const humVal   = parseFloat(data.humidity) || 0;
-        const lightVal = parseInt(data.light, 10) || 0;
-        const windVal  = parseFloat(data.wind) || 0;
-        const timeStr  = getVNTimeString();
+        const { temperature, humidity, light } = data;
+        const lightVal = parseInt(light);
+        const timeStr = getVNTimeString();
 
         await pool.query(
-          `INSERT INTO sensor_data (sensor_id, reading_value, recorded_at) 
-           VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?)`,
-          [
-            1, tempVal, timeStr,
-            2, humVal, timeStr,
-            3, lightVal, timeStr,
-            4, windVal, timeStr
-          ]
+          'INSERT INTO sensor_data (sensor_id, reading_value, recorded_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)',
+          [1, temperature, timeStr, 2, humidity, timeStr, 3, lightVal, timeStr]
         );
 
         io.emit('sensor_telemetry', {
-          temperature: tempVal,
-          humidity: humVal,
+          temperature: parseFloat(temperature),
+          humidity: parseFloat(humidity),
           light: lightVal,
-          wind: windVal,
           time: timeStr
         });
 
@@ -63,12 +54,13 @@ module.exports = function initMqttHandler(io) {
         if (lightVal < LIGHT_LIMIT) {
           io.emit('alert_trigger', {
             type: 'LOW_LIGHT',
-            message: `Low ambient light (${lightVal} Lux < ${LIGHT_LIMIT} Lux). Auto turning ON Relay Light!`,
+            message: `Ánh sáng phòng yếu (${lightVal} Lux < ${LIGHT_LIMIT} Lux). Hệ thống đang kích hoạt bật đèn!`,
             value: lightVal
           });
 
           const [lightDev] = await pool.query('SELECT status FROM device WHERE device_id = 2');
           if (lightDev.length && Number(lightDev[0].status) === 0 && !pendingActions.has('2_ON')) {
+            console.log('[AUTO ALERT] Light < 50 Lux -> Auto turning ON Relay Light 01');
             await executeDeviceControl(io, 2, 'ON', 'AUTO');
           }
         }

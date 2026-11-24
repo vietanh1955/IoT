@@ -29,7 +29,7 @@ body { display: flex; height: 100vh; background-color: var(--bg-main); color: va
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .header h2 { font-size: 24px; font-weight: 700; }
 
-body:has(#dashboard.active) .content { overflow-y: hidden !important; }
+body:has(#dashboard.active) .content { overflow-y: auto; }
 #dashboard .header { margin-bottom: 10px; }
 #dashboard .cards { margin-bottom: 12px; gap: 14px; }
 #dashboard .card { padding: 12px 16px; }
@@ -38,7 +38,7 @@ body:has(#dashboard.active) .content { overflow-y: hidden !important; }
 #dashboard .relays { gap: 14px; }
 #dashboard .relay-card { padding: 10px 16px; }
 
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
 .card { background: var(--bg-card); padding: 14px 18px; border-radius: 12px; border: 1px solid var(--border); transition: all 0.3s ease; }
 .card-head { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 12px; font-weight: 600; margin-bottom: 8px; }
 .card h3 { font-size: 26px; font-weight: 700; }

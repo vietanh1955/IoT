@@ -19,34 +19,45 @@ module.exports = function initMqttHandler(io) {
     try {
       const data = JSON.parse(message.toString());
 
+      // 1. Đồng bộ trạng thái 4 thiết bị từ DB xuống ESP8266 khi khởi động
       if (topic === TOPIC_SYNC) {
-        console.log('[MQTT Sync Request] ESP8266 connected. Pushing DB device states to board...');
+        console.log('[MQTT Sync] Pushing DB device states (1..4) to ESP8266...');
         const [devices] = await pool.query('SELECT device_id, status FROM device');
         
         devices.forEach(dev => {
           const act = Number(dev.status) === 1 ? 'ON' : 'OFF';
           mqttClient.publish(TOPIC_CONTROL, JSON.stringify({
-            deviceId: parseInt(dev.device_id),
+            deviceId: parseInt(dev.device_id, 10),
             action: act
           }));
         });
         return;
       }
 
+      // 2. Nhận 4 giá trị cảm biến, lưu vào sensor_data và phát realtime
       if (topic === TOPIC_SENSOR) {
-        const { temperature, humidity, light } = data;
-        const lightVal = parseInt(light);
-        const timeStr = getVNTimeString();
+        const tempVal  = parseFloat(data.temperature) || 0;
+        const humVal   = parseFloat(data.humidity) || 0;
+        const lightVal = parseInt(data.light, 10) || 0;
+        const windVal  = parseFloat(data.wind) || 0;
+        const timeStr  = getVNTimeString();
 
         await pool.query(
-          'INSERT INTO sensor_data (sensor_id, reading_value, recorded_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)',
-          [1, temperature, timeStr, 2, humidity, timeStr, 3, lightVal, timeStr]
+          `INSERT INTO sensor_data (sensor_id, reading_value, recorded_at) 
+           VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?)`,
+          [
+            1, tempVal, timeStr,
+            2, humVal, timeStr,
+            3, lightVal, timeStr,
+            4, windVal, timeStr
+          ]
         );
 
         io.emit('sensor_telemetry', {
-          temperature: parseFloat(temperature),
-          humidity: parseFloat(humidity),
+          temperature: tempVal,
+          humidity: humVal,
           light: lightVal,
+          wind: windVal,
           time: timeStr
         });
 
@@ -54,23 +65,22 @@ module.exports = function initMqttHandler(io) {
         if (lightVal < LIGHT_LIMIT) {
           io.emit('alert_trigger', {
             type: 'LOW_LIGHT',
-            message: `Ánh sáng phòng yếu (${lightVal} Lux < ${LIGHT_LIMIT} Lux). Hệ thống đang kích hoạt bật đèn!`,
+            message: `Low ambient light (${lightVal} Lux < ${LIGHT_LIMIT} Lux). Auto turning ON Relay Light!`,
             value: lightVal
           });
 
           const [lightDev] = await pool.query('SELECT status FROM device WHERE device_id = 2');
           if (lightDev.length && Number(lightDev[0].status) === 0 && !pendingActions.has('2_ON')) {
-            console.log('[AUTO ALERT] Light < 50 Lux -> Auto turning ON Relay Light 01');
             await executeDeviceControl(io, 2, 'ON', 'AUTO');
           }
         }
       }
 
+      // 3. Nhận phản hồi ACK từ ESP8266 cho cả 4 đèn (ID 1..4)
       if (topic === TOPIC_RESPONSE) {
-        console.log('[MQTT Response received]:', data);
         const devId = String(data.deviceId);
-        const act = String(data.action).toUpperCase();
-        const key = `${devId}_${act}`;
+        const act   = String(data.action).toUpperCase();
+        const key   = `${devId}_${act}`;
 
         if (pendingActions.has(key)) {
           const item = pendingActions.get(key);
@@ -81,7 +91,10 @@ module.exports = function initMqttHandler(io) {
           const timeStr = getVNTimeString();
           const newStatus = act === 'ON' ? 1 : 0;
 
-          await pool.query('UPDATE device SET status = ?, last_connected = NOW() WHERE device_id = ?', [newStatus, devId]);
+          await pool.query(
+            'UPDATE device SET status = ?, last_connected = NOW() WHERE device_id = ?',
+            [newStatus, devId]
+          );
 
           const [ins] = await pool.query(
             'INSERT INTO action_history (device_id, user_id, action, status, executed_at) VALUES (?, ?, ?, ?, ?)',
@@ -97,7 +110,7 @@ module.exports = function initMqttHandler(io) {
           });
 
           io.emit('device_state_sync', {
-            deviceId: parseInt(devId),
+            deviceId: parseInt(devId, 10),
             status: newStatus,
             reason: 'SUCCESS'
           });

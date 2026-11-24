@@ -100,7 +100,9 @@ function renderSensorPagination() {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:20px;">Không có dữ liệu phù hợp</td></tr>`;
   } else {
     pageItems.forEach(row => {
-      let badgeCls = row.type === 'Temperature' ? 'badge-red' : (row.type === 'Humidity' ? 'badge-blue' : 'badge-yellow');
+      let badgeCls = 'badge-yellow';
+      if (row.type === 'Temperature') badgeCls = 'badge-red';
+      else if (row.type === 'Humidity' || row.type === 'Wind Speed') badgeCls = 'badge-blue';
       tbody.innerHTML += `
         <tr>
           <td class="text-blue">${row.id}</td>

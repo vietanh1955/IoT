@@ -2,12 +2,13 @@ const pool = require('../config/db');
 
 exports.getSensors = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
     const offset = (page - 1) * limit;
     const field = req.query.field || '';
     const keyword = req.query.keyword ? req.query.keyword.trim() : '';
 
+    const allowedSensors = ['Temperature', 'Humidity', 'Ambient Light', 'Wind Speed'];
     let whereClause = '';
     const params = [];
 
@@ -15,7 +16,7 @@ exports.getSensors = async (req, res) => {
       if (field === 'Time') {
         whereClause = 'WHERE DATE_FORMAT(sd.recorded_at, "%Y-%m-%d %H:%i:%s") LIKE ?';
         params.push(`%${keyword}%`);
-      } else if (['Temperature', 'Humidity', 'Ambient Light'].includes(field)) {
+      } else if (allowedSensors.includes(field)) {
         whereClause = 'WHERE s.sensor_type = ? AND CAST(sd.reading_value AS CHAR) LIKE ?';
         params.push(field, `%${keyword}%`);
       }

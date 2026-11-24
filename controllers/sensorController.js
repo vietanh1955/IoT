@@ -15,7 +15,7 @@ exports.getSensors = async (req, res) => {
       if (field === 'Time') {
         whereClause = 'WHERE DATE_FORMAT(sd.recorded_at, "%Y-%m-%d %H:%i:%s") LIKE ?';
         params.push(`%${keyword}%`);
-      } else if (['Temperature', 'Humidity', 'Ambient Light'].includes(field)) {
+      } else if (['Temperature', 'Humidity', 'Ambient Light', 'Wind Speed'].includes(field)) {
         whereClause = 'WHERE s.sensor_type = ? AND CAST(sd.reading_value AS CHAR) LIKE ?';
         params.push(field, `%${keyword}%`);
       }

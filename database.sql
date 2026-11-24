@@ -47,12 +47,15 @@ INSERT INTO `user` (user_id, user_name, password_hash, email) VALUES
 ON DUPLICATE KEY UPDATE user_name = VALUES(user_name);
 
 INSERT INTO device (device_id, device_name, pin, status) VALUES
-(1, 'Relay Fan 01', 14, 1),
-(2, 'Relay Light 01', 12, 0)
-ON DUPLICATE KEY UPDATE device_name = VALUES(device_name);
+(1, 'Relay Fan 01', 14, 0),
+(2, 'Relay Light 01', 12, 0),
+(3, 'Relay LED 03', 13, 0),
+(4, 'Relay LED 04', 4, 0)
+ON DUPLICATE KEY UPDATE device_name = VALUES(device_name), pin = VALUES(pin);
 
 INSERT INTO sensor (sensor_id, sensor_type, unit) VALUES
 (1, 'Temperature', '°C'),
 (2, 'Humidity', '%'),
-(3, 'Ambient Light', 'Lux')
-ON DUPLICATE KEY UPDATE sensor_type = VALUES(sensor_type);
+(3, 'Ambient Light', 'Lux'),
+(4, 'Wind Speed', 'm/s')
+ON DUPLICATE KEY UPDATE sensor_type = VALUES(sensor_type), unit = VALUES(unit);

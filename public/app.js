@@ -37,6 +37,10 @@ socket.on('sensor_telemetry', (data) => {
   document.getElementById('dash-temp').innerHTML = `${data.temperature} <span>°C</span>`;
   document.getElementById('dash-hum').innerHTML = `${data.humidity} <span>%</span>`;
   document.getElementById('dash-light').innerHTML = `${data.light} <span>Lux</span>`;
+  const dashWind = document.getElementById('dash-wind');
+  if (dashWind && data.wind !== undefined) {
+    dashWind.innerHTML = `${data.wind} <span>m/s</span>`;
+  }
 
   const lightCard = document.getElementById('card-light');
   const lightAlertSub = document.getElementById('dash-light-sub');
@@ -60,11 +64,13 @@ socket.on('sensor_telemetry', (data) => {
     realtimeChartData.temp.shift();
     realtimeChartData.hum.shift();
     realtimeChartData.light.shift();
+    realtimeChartData.wind.shift();
   }
   realtimeChartData.labels.push(timeLabel);
   realtimeChartData.temp.push(data.temperature);
   realtimeChartData.hum.push(data.humidity);
   realtimeChartData.light.push(data.light);
+  realtimeChartData.wind.push(data.wind ?? 0);
 
   mainChart.data.labels = [...realtimeChartData.labels];
   mainChart.data.datasets[0].data = [...realtimeChartData.temp];
@@ -72,10 +78,17 @@ socket.on('sensor_telemetry', (data) => {
   mainChart.data.datasets[2].data = [...realtimeChartData.light];
   mainChart.update();
 
+  if (windChart) {
+    windChart.data.labels = [...realtimeChartData.labels];
+    windChart.data.datasets[0].data = [...realtimeChartData.wind];
+    windChart.update();
+  }
+
   sensorRows.unshift(
     { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Temperature', value: `${data.temperature} °C`, time: data.time },
     { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Humidity', value: `${data.humidity} %`, time: data.time },
-    { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Ambient Light', value: `${data.light} Lux`, time: data.time }
+    { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Ambient Light', value: `${data.light} Lux`, time: data.time },
+    { id: `#S${Math.floor(Math.random()*9000)+1000}`, type: 'Wind Speed', value: `${data.wind ?? 0} m/s`, time: data.time }
   );
   filterSensorTable(false);
 });

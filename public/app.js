@@ -37,10 +37,7 @@ socket.on('sensor_telemetry', (data) => {
   document.getElementById('dash-temp').innerHTML = `${data.temperature} <span>°C</span>`;
   document.getElementById('dash-hum').innerHTML = `${data.humidity} <span>%</span>`;
   document.getElementById('dash-light').innerHTML = `${data.light} <span>Lux</span>`;
-  const dashWind = document.getElementById('dash-wind');
-  if (dashWind && data.wind !== undefined) {
-    dashWind.innerHTML = `${data.wind} <span>m/s</span>`;
-  }
+  document.getElementById('dash-wind').innerHTML = `${data.wind} <span>m/s</span>`;
 
   const lightCard = document.getElementById('card-light');
   const lightAlertSub = document.getElementById('dash-light-sub');
